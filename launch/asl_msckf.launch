@@ -5,7 +5,7 @@
     <param name="data_set_path" value="/home/ken/euroc_datasets/MH_03_medium/mav0"/>
     <param name="stand_still_end" value="1403637149088318946."/>
 
-    <param name="feature_cov" value="3"/>
+    <param name="feature_cov" value="5"/>
 
     <param name="imu_vars/w_var" value="1e-4"/>
     <param name="imu_vars/dbg_var" value="3.6733e-5"/>
