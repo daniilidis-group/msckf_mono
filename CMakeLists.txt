@@ -87,5 +87,5 @@ target_link_libraries(msckf_mono
 add_executable(asl_msckf datasets/asl_msckf.cpp datasets/asl_readers.cpp)
 target_link_libraries(asl_msckf msckf_mono ${LINK_LIBS})
 
-add_executable(pcv_msckf datasets/penncosy_msckf.cpp)
+add_executable(pcv_msckf datasets/penncosy_msckf.cpp datasets/penncosy_readers.cpp)
 target_link_libraries(pcv_msckf ${LINK_LIBS} msckf_mono)

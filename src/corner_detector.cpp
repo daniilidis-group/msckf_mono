@@ -347,7 +347,8 @@ void TrackHandler::predict_features(Point2fVector& predicted_pts){
   // homography by rotation
   cv::Mat H = K_ * R * K_inv_;
   cv::Mat pt_buf1(3,1,CV_32F);
-  pt_buf1.at<float>(2) = 0.0;
+  pt_buf1.at<float>(2) = 1.0;
+
   cv::Mat pt_buf2(3,1,CV_32F);
 
   for(auto& pt : prev_features_){
@@ -357,8 +358,8 @@ void TrackHandler::predict_features(Point2fVector& predicted_pts){
     pt_buf2 = H * pt_buf1;
 
     Point2f new_point;
-    new_point.x = pt_buf2.at<float>(0);
-    new_point.y = pt_buf2.at<float>(1);
+    new_point.x = pt_buf2.at<float>(0) / pt_buf2.at<float>(2);
+    new_point.y = pt_buf2.at<float>(1) / pt_buf2.at<float>(2);
     predicted_pts.push_back(new_point);
   }
 }

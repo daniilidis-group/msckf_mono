@@ -1,6 +1,3 @@
-#include <iostream>
-#include <string>
-
 #include <ros/ros.h>
 
 #include <image_transport/image_transport.h>
@@ -32,14 +29,14 @@ int main(int argc, char** argv)
 
 
   std::shared_ptr<VI_IMU> imu0;
-  std::shared_ptr<Camera> cam0;
+  std::shared_ptr<VICamera> cam0;
 
   std::string seq = "af";
-  std::string path = "/home/ken/src_libs/penncosyvio";
+  std::string path = "/home/ken/datasets/penncosyvio";
 
   imu0.reset(new VI_IMU(path, "visensor", seq));
-  cam0.reset(new Camera(path, "visensor", seq, "timestamps_cameras.txt", "right_cam_frames"));
-  ros::Rate r_cam(20.0);
+  cam0.reset(new VICamera(path, "visensor", seq, "timestamps_cameras.txt", "right"));
+  ros::Rate r_cam(0.25*1.0/cam0->get_dT());
 
   auto sync = make_synchronizer(imu0, cam0);
 
@@ -48,12 +45,12 @@ int main(int argc, char** argv)
   image_transport::Publisher raw_img_pub = it.advertise("image", 1);
   image_transport::Publisher track_img_pub = it.advertise("image_track", 1);
 
-  //msckf::Camera camera;
-  //auto K = cam0->get_K();
-  //camera.f_u = K.at<float>(0,0);
-  //camera.f_v = K.at<float>(1,1);
-  //camera.c_u = K.at<float>(0,2);
-  //camera.c_v = K.at<float>(1,2);
+  msckf::Camera camera;
+  auto K = cam0->get_K();
+  camera.f_u = K.at<float>(0,0);
+  camera.f_v = K.at<float>(1,1);
+  camera.c_u = K.at<float>(0,2);
+  camera.c_v = K.at<float>(1,2);
 
   //camera.q_CI = cam0->get_q_BS();
   //camera.p_C_I = cam0->get_p_BS();
@@ -113,9 +110,7 @@ int main(int argc, char** argv)
   //msckf_params.min_track_length = min_tl;
   //msckf_params.max_cam_states = max_cs;
 
-  cv::Mat K;
-  corner_detector::TrackHandler th(K);
-  corner_detector::TrackVisualizer tv;
+  corner_detector::TrackHandler th(cam0->get_K());
 
   //double ransac_threshold;
   //nh.param<double>("ransac_threshold", ransac_threshold, 0.000002);
@@ -126,42 +121,50 @@ int main(int argc, char** argv)
   th.set_grid_size(n_grid_rows, n_grid_cols);
 
   //int state_k = 0;
+  
+  Eigen::Quaterniond q_CI = cam0->get_q_BS() * imu0->get_q_BS().inverse();
 
   while(sync.has_next() && ros::ok()){
     auto data_pack = sync.get_data();
     auto imu_reading = std::get<0>(data_pack);
     auto image_reading = std::get<1>(data_pack);
 
-    ros::Time cur_ros_time;
-    cur_ros_time.fromNSec(imu0->get_time());
+    if(imu_reading){
+      ros::Time cur_ros_time;
+      cur_ros_time.fromNSec(imu0->get_time());
 
-    if (image_reading){
-      corner_detector::Point2fVector points;
-      corner_detector::IdVector ids;
-      cv::Mat img = image_reading.get();
+      auto imu_data = imu_reading.get();
 
-      //auto boundry_id = th.get_next_feature_id();
-      //th.track_features(img, points, ids);
-      //tv.add_current_features(points, ids);
+      Eigen::Vector3d cam_frame_av = q_CI.inverse() * imu_data.omega;//Eigen::Vector3d::Zero(); //
+      th.add_gyro_reading(cam_frame_av);
 
-      //if(raw_img_pub.getNumSubscribers()>0){
-      //  cv_bridge::CvImage out_img;
-      //  out_img.header.frame_id = "cam0"; // Same timestamp and tf frame as input image
-      //  out_img.header.stamp = cur_ros_time;
-      //  out_img.encoding = sensor_msgs::image_encodings::TYPE_8UC1; // Or whatever
-      //  out_img.image    = img; // Your cv::Mat
-      //  raw_img_pub.publish(out_img.toImageMsg());
-      //}
+      if (image_reading){
+        corner_detector::Point2fVector points;
+        corner_detector::IdVector ids;
+        cv::Mat img = image_reading.get();
 
-      //if(track_img_pub.getNumSubscribers()>0){
-      //  cv_bridge::CvImage out_img;
-      //  out_img.header.frame_id = "cam0"; // Same timestamp and tf frame as input image
-      //  out_img.header.stamp = cur_ros_time;
-      //  out_img.encoding = sensor_msgs::image_encodings::TYPE_8UC3; // Or whatever
-      //  out_img.image = tv.draw_tracks(img); // Your cv::Mat
-      //  track_img_pub.publish(out_img.toImageMsg());
-      //}
-      r_cam.sleep();
+        auto boundry_id = th.get_next_feature_id();
+        th.track_features(img, points, ids, ((double)cam0->get_time()));
+
+        if(raw_img_pub.getNumSubscribers()>0){
+          cv_bridge::CvImage out_img;
+          out_img.header.frame_id = "cam0"; // Same timestamp and tf frame as input image
+          out_img.header.stamp = cur_ros_time;
+          out_img.encoding = sensor_msgs::image_encodings::TYPE_8UC1; // Or whatever
+          out_img.image = img; // Your cv::Mat
+          raw_img_pub.publish(out_img.toImageMsg());
+        }
+
+        if(track_img_pub.getNumSubscribers()>0){
+          cv_bridge::CvImage out_img;
+          out_img.header.frame_id = "cam0"; // Same timestamp and tf frame as input image
+          out_img.header.stamp = cur_ros_time;
+          out_img.encoding = sensor_msgs::image_encodings::TYPE_8UC3; // Or whatever
+          out_img.image = th.get_track_image(); // Your cv::Mat
+          track_img_pub.publish(out_img.toImageMsg());
+        }
+        r_cam.sleep();
+      }
     }
 
     sync.next();

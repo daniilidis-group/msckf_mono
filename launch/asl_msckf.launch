@@ -2,7 +2,11 @@
 <launch>
   <arg name="gdb_debug" default="false"/>
   <group ns="msckf">
-    <param name="data_set_path" value="/home/ken/euroc_datasets/MH_03_medium/mav0"/>
+    <!--
+    <param name="data_set_path" value="/home/ken/datasets/euroc_datasets/MH_05_difficult/mav0"/>
+    <param name="stand_still_end" value="1403638521727829504."/>
+    -->
+    <param name="data_set_path" value="/home/ken/datasets/euroc_datasets/MH_03_medium/mav0"/>
     <param name="stand_still_end" value="1403637149088318946."/>
 
     <param name="feature_cov" value="5"/>
@@ -25,7 +29,7 @@
     <param name="keyframe_rot_dist" value="0.5"/>
 
     <param name="min_track_length" value="5"/>
-    <param name="max_track_length" value="1000"/>
+    <param name="max_track_length" value="100"/>
     <param name="max_cam_states" value="20"/>
 
     <param name="ransac_threshold" value="0.0000002"/>

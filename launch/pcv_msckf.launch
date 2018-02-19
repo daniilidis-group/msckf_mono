@@ -34,10 +34,10 @@
     <param name="n_grid_rows" value="8"/>
     <param name="n_grid_cols" value="8"/>
 
-    <node pkg="msckf_cpp" name="pcv_msckf" type="pcv_msckf" unless="$(arg gdb_debug)" output="screen"/>
-    <node pkg="msckf_cpp" name="pcv_msckf" type="pcv_msckf" launch-prefix="xterm -e gdb --args" if="$(arg gdb_debug)"/>
+    <node pkg="msckf_mono" name="pcv_msckf" type="pcv_msckf" unless="$(arg gdb_debug)" output="screen"/>
+    <node pkg="msckf_mono" name="pcv_msckf" type="pcv_msckf" launch-prefix="xterm -e gdb --args" if="$(arg gdb_debug)"/>
 
-    <node pkg="rviz" name="msckf_rviz" type="rviz" args="-d $(find msckf_cpp)/launch/pcv_msckf.rviz"/>
+    <node pkg="rviz" name="msckf_rviz" type="rviz" args="-d $(find msckf_mono)/launch/pcv_msckf.rviz"/>
 
   </group>
 </launch>

@@ -122,7 +122,6 @@ int main(int argc, char** argv)
   msckf_params.min_track_length = min_tl;
   msckf_params.max_cam_states = max_cs;
 
-
   corner_detector::TrackHandler th(cam0->get_K());
 
   double ransac_threshold;
@@ -232,7 +231,7 @@ int main(int argc, char** argv)
       Eigen::Quaterniond prev_rotation = prev_imu_state.q_IG;
       msckf.propagate(imu_data);
 
-      Eigen::Vector3d cam_frame_av = camera.q_CI * (imu_data.omega-prev_imu_state.b_g);
+      Eigen::Vector3d cam_frame_av = camera.q_CI.inverse() * (imu_data.omega-prev_imu_state.b_g);
       th.add_gyro_reading(cam_frame_av);
       TEND(imu_prop);
       TRECORD(imu_prop);
