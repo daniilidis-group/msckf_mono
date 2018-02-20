@@ -66,7 +66,7 @@ namespace asl_dataset
         if( s.rdbuf()->in_avail() == 0 )
         return false;
 
-        std::pair<size_t, std::string> p;
+        std::pair<timestamp, std::string> p;
         s >> p.first; // timestamp [ns]
         char ch;
         s >> ch; // handle the comma
@@ -78,7 +78,7 @@ namespace asl_dataset
     list_iter_ = image_list_.begin();
   }
 
-  size_t Camera::get_time()
+  timestamp Camera::get_time()
   {
     return list_iter_->first;
   }
@@ -183,7 +183,8 @@ namespace asl_dataset
         if( s.rdbuf()->in_avail() == 0 )
         return false;
 
-        std::pair<size_t, msckf_mono::imuReading<float>> p;
+        std::pair<timestamp, msckf_mono::imuReading<float>> p;
+
         char c;
         s >> p.first; // timestamp [ns]
         s >> c;
@@ -207,7 +208,7 @@ namespace asl_dataset
     list_iter_ = reading_list_.begin();
   }
 
-  size_t IMU::get_time()
+  timestamp IMU::get_time()
   {
     return list_iter_->first;
   }
@@ -273,7 +274,7 @@ namespace asl_dataset
         if( s.rdbuf()->in_avail() == 0 )
         return false;
 
-        std::pair<size_t, msckf_mono::imuState<float> > p;
+        std::pair<timestamp, msckf_mono::imuState<float> > p;
         char c;
 
         msckf_mono::Vector3<double> tmp_v;
@@ -343,7 +344,7 @@ namespace asl_dataset
     list_iter_ = reading_list_.begin();
   }
 
-  size_t GroundTruth::get_time()
+  timestamp GroundTruth::get_time()
   {
     return list_iter_->first;
   }

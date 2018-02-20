@@ -11,6 +11,8 @@
 
 namespace asl_dataset
 {
+  using timestamp = unsigned long long;
+  
   class Sensor
   {
     public:
@@ -20,7 +22,7 @@ namespace asl_dataset
       std::string name_;
       std::string folder_;
 
-      size_t cur_time_;
+      timestamp cur_time_;
 
       template<typename Lambda>
       void read_csv(Lambda line_func)
@@ -66,7 +68,7 @@ namespace asl_dataset
     public:
       Camera(std::string name, std::string folder);
 
-      size_t get_time();
+      timestamp get_time();
 
       cv::Mat get_data();
 
@@ -97,8 +99,8 @@ namespace asl_dataset
       std::string distortion_model_;
       cv::Mat distortion_coefficients_;
 
-      std::vector<std::pair<size_t, std::string>> image_list_;
-      std::vector<std::pair<size_t, std::string>>::iterator list_iter_;
+      std::vector<std::pair<timestamp, std::string>> image_list_;
+      std::vector<std::pair<timestamp, std::string>>::iterator list_iter_;
   };
 
   class IMU : public Sensor
@@ -106,8 +108,9 @@ namespace asl_dataset
     public:
       IMU(std::string name, std::string folder);
 
-      size_t get_time();
+      timestamp get_time();
       msckf_mono::imuReading<float> get_data();
+
       bool next();
       bool has_next();
 
@@ -132,8 +135,8 @@ namespace asl_dataset
       msckf_mono::Vector3<float> p_BS_;
       msckf_mono::Quaternion<float> q_BS_;
 
-      std::vector<std::pair<size_t, msckf_mono::imuReading<float>>> reading_list_;
-      std::vector<std::pair<size_t, msckf_mono::imuReading<float>>>::iterator list_iter_;
+      std::vector<std::pair<timestamp, msckf_mono::imuReading<float>>> reading_list_;
+      std::vector<std::pair<timestamp, msckf_mono::imuReading<float>>>::iterator list_iter_;
   };
 
   class GroundTruth : public Sensor
@@ -141,8 +144,9 @@ namespace asl_dataset
     public:
       GroundTruth(std::string name, std::string folder);
 
-      size_t get_time();
+      timestamp get_time();
       msckf_mono::imuState<float> get_data();
+
       bool next();
       bool has_next();
 
@@ -152,7 +156,7 @@ namespace asl_dataset
       msckf_mono::Quaternion<float> q_BS_;
 
 
-      std::vector<std::pair<size_t, msckf_mono::imuState<float>>> reading_list_;
-      std::vector<std::pair<size_t, msckf_mono::imuState<float>>>::iterator list_iter_;
+      std::vector<std::pair<timestamp, msckf_mono::imuState<float>>> reading_list_;
+      std::vector<std::pair<timestamp, msckf_mono::imuState<float>>>::iterator list_iter_;
   };
 }
