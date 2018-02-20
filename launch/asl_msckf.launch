@@ -8,7 +8,7 @@
     <param name="data_set_path" value="/home/ken/datasets/euroc_datasets/MH_05_difficult/mav0"/>
     <param name="stand_still_end" value="1403638521727829504."/>
     -->
-    <param name="data_set_path" value="/home/ken/datasets/euroc_datasets/MH_03_medium/mav0"/>
+    <param name="data_set_path" value="/media/jeff/AA5E8AFD5E8AC195/VIO/euroc/MH_03/mav0"/>
     <param name="stand_still_end" value="1403637149088318946."/>
 
     <param name="feature_cov" value="2"/>
