@@ -189,7 +189,7 @@ namespace penncosy_dataset
         if( s.rdbuf()->in_avail() == 0 )
         return false;
 
-        std::pair<double, msckf::measurement> p;
+        std::pair<double, msckf_mono::measurement> p;
         s >> p.first; // timestamp [s]
 
         s >> p.second.a[0]; // a_RS_S_x [m s^-2]
@@ -214,7 +214,7 @@ namespace penncosy_dataset
     return list_iter_->first;
   }
 
-  msckf::measurement VI_IMU::get_data()
+  msckf_mono::measurement VI_IMU::get_data()
   {
     return list_iter_->second;
   }

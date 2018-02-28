@@ -40,12 +40,12 @@ int main(int argc, char** argv)
 
   auto sync = make_synchronizer(imu0, cam0);
 
-  //msckf::MSCKF msckf;
+  //msckf_mono::MSCKF msckf;
   image_transport::ImageTransport it(nh);
   image_transport::Publisher raw_img_pub = it.advertise("image", 1);
   image_transport::Publisher track_img_pub = it.advertise("image_track", 1);
 
-  msckf::Camera camera;
+  msckf_mono::Camera camera;
   auto K = cam0->get_K();
   camera.f_u = K.at<float>(0,0);
   camera.f_v = K.at<float>(1,1);
@@ -61,7 +61,7 @@ int main(int argc, char** argv)
   //double feature_cov;
   //nh.param<double>("feature_covariance", feature_cov, 7);
 
-  //msckf::noiseParams noise_params;
+  //msckf_mono::noiseParams noise_params;
   //noise_params.u_var_prime = pow(feature_cov/camera.f_u,2);
   //noise_params.v_var_prime = pow(feature_cov/camera.f_v,2);
 
@@ -91,7 +91,7 @@ int main(int argc, char** argv)
   //                 p_var_init, p_var_init, p_var_init;
   //noise_params.initial_imu_covar = IMUCovar_vars.asDiagonal();
 
-  //msckf::MSCKFParams msckf_params;
+  //msckf_mono::MSCKFParams msckf_params;
   //nh.param<double>("max_gn_cost_norm", msckf_params.max_gn_cost_norm, 11);
   //msckf_params.max_gn_cost_norm = pow(msckf_params.max_gn_cost_norm/camera.f_u, 2);
   //nh.param<double>("translation_threshold", msckf_params.translation_threshold, 0.05);

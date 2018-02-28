@@ -8,10 +8,7 @@
 #include <algorithm>
 
 #include <opencv2/core/core.hpp>
-#include <msckf_mono/measurement.h>
-#include <msckf_mono/imustate.h>
-#include <Eigen/Dense>
-#include <Eigen/Geometry>
+#include <msckf_mono/types.h>
 
 namespace penncosy_dataset
 {
@@ -129,7 +126,7 @@ namespace penncosy_dataset
 
       double get_time();
 
-      msckf::measurement get_data();
+      msckf_mono::measurement get_data();
 
       bool next();
 
@@ -147,7 +144,7 @@ namespace penncosy_dataset
       Eigen::Vector3d p_BS_;
       Eigen::Quaterniond q_BS_;
 
-      std::vector<std::pair<double, msckf::measurement>> reading_list_;
-      std::vector<std::pair<double, msckf::measurement>>::iterator list_iter_;
+      std::vector<std::pair<double, msckf_mono::measurement>> reading_list_;
+      std::vector<std::pair<double, msckf_mono::measurement>>::iterator list_iter_;
   };
 }

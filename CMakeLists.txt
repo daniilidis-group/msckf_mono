@@ -1,14 +1,15 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(msckf_mono)
 
-SET(CMAKE_BUILD_TYPE "Release")
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -msse4.2 -msse -msse2 -mavx -funroll-loops")
+SET(CMAKE_BUILD_TYPE "RelWithDebInfo")
 
 IF(NOT CMAKE_BUILD_TYPE)
   SET(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build, options are: None (CMAKE_CXX_FLAGS or CMAKE_C_FLAGS used) Debug Release RelWithDebInfo MinSizeRel." FORCE)
 ENDIF()
 
-SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -std=c++14 -msse4.2 -msse -msse2 -DEIGEN_NO_DEBUG")
-SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -std=c++14 -g")
+SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -DEIGEN_NO_DEBUG")
+SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -g -DEIGEN_NO_DEBUG")
 
 find_package(cmake_modules REQUIRED)
 find_package(Eigen REQUIRED)
@@ -73,7 +74,6 @@ LIST(APPEND LINK_LIBS
   )
 
 LIST(APPEND MSCKF_SRCS
-  src/msckf.cpp
   src/corner_detector.cpp
   )
 
@@ -87,5 +87,5 @@ target_link_libraries(msckf_mono
 add_executable(asl_msckf datasets/asl_msckf.cpp datasets/asl_readers.cpp)
 target_link_libraries(asl_msckf msckf_mono ${LINK_LIBS})
 
-add_executable(pcv_msckf datasets/penncosy_msckf.cpp datasets/penncosy_readers.cpp)
-target_link_libraries(pcv_msckf ${LINK_LIBS} msckf_mono)
+# add_executable(pcv_msckf datasets/penncosy_msckf.cpp datasets/penncosy_readers.cpp)
+# target_link_libraries(pcv_msckf ${LINK_LIBS} msckf_mono)

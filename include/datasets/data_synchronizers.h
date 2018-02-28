@@ -12,12 +12,6 @@
 #include <utility>
 #include <algorithm>
 
-#include <opencv2/core/core.hpp>
-#include <msckf_mono/measurement.h>
-#include <msckf_mono/imustate.h>
-#include <Eigen/Dense>
-#include <Eigen/Geometry>
-
 namespace synchronizer
 {
   template <typename T> struct has_get_data {

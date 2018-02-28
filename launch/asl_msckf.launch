@@ -1,6 +1,8 @@
 <?xml version="1.0"?>
 <launch>
   <arg name="gdb_debug" default="false"/>
+  <arg name="profile" default="false"/>
+
   <group ns="msckf">
     <!--
     <param name="data_set_path" value="/home/ken/datasets/euroc_datasets/MH_05_difficult/mav0"/>
@@ -9,7 +11,7 @@
     <param name="data_set_path" value="/home/ken/datasets/euroc_datasets/MH_03_medium/mav0"/>
     <param name="stand_still_end" value="1403637149088318946."/>
 
-    <param name="feature_cov" value="5"/>
+    <param name="feature_cov" value="2"/>
 
     <param name="imu_vars/w_var" value="1e-4"/>
     <param name="imu_vars/dbg_var" value="3.6733e-5"/>
@@ -25,20 +27,25 @@
     <param name="max_gn_cost_norm" value="7"/>
     <param name="translation_threshold" value="0.005"/><!--Max translation from marginalizing state-->
 
-    <param name="keyframe_transl_dist" value="0.5"/>
-    <param name="keyframe_rot_dist" value="0.5"/>
+    <param name="keyframe_transl_dist" value="0.1"/>
+    <param name="keyframe_rot_dist" value="0.1"/>
 
-    <param name="min_track_length" value="5"/>
+    <param name="min_track_length" value="3"/>
     <param name="max_track_length" value="100"/>
-    <param name="max_cam_states" value="20"/>
+    <param name="max_cam_states" value="30"/>
 
     <param name="ransac_threshold" value="0.0000002"/>
 
     <param name="n_grid_rows" value="8"/>
-    <param name="n_grid_cols" value="8"/>
+    <param name="n_grid_cols" value="10"/>
 
-    <node pkg="msckf_mono" name="asl_msckf" type="asl_msckf" unless="$(arg gdb_debug)" output="screen"/>
-    <node pkg="msckf_mono" name="asl_msckf" type="asl_msckf" launch-prefix="xterm -e gdb --args" if="$(arg gdb_debug)"/>
+    <group unless="$(arg profile)">
+      <node pkg="msckf_mono" name="asl_msckf" type="asl_msckf" unless="$(arg gdb_debug)" output="screen"/>
+      <node pkg="msckf_mono" name="asl_msckf" type="asl_msckf" launch-prefix="xterm -e gdb --args" if="$(arg gdb_debug)"/>
+    </group>
+    <group if="$(arg profile)">
+      <node pkg="msckf_mono" name="asl_msckf" type="asl_msckf" launch-prefix="perf record -g --call-graph dwarf --output=perf.out.node_name.data --" if="$(arg profile)"/>
+    </group>
 
     <node pkg="rviz" name="msckf_rviz" type="rviz" args="-d $(find msckf_mono)/launch/asl_msckf.rviz"/>
 

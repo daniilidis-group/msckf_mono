@@ -7,10 +7,7 @@
 #include <iostream>
 
 #include <opencv2/core/core.hpp>
-#include <msckf_mono/measurement.h>
-#include <msckf_mono/imustate.h>
-#include <Eigen/Dense>
-#include <Eigen/Geometry>
+#include <msckf_mono/types.h>
 
 namespace asl_dataset
 {
@@ -78,8 +75,8 @@ namespace asl_dataset
       bool next();
 
       cv::Mat get_T_BS();
-      Eigen::Vector3d get_p_BS();
-      Eigen::Quaterniond get_q_BS();
+      msckf_mono::Vector3<float> get_p_BS();
+      msckf_mono::Quaternion<float> get_q_BS();
       std::string get_camera_model();
       cv::Mat get_K();
       std::string get_dist_model();
@@ -87,8 +84,8 @@ namespace asl_dataset
       double get_dT();
 
     private:
-      Eigen::Vector3d p_BS_;
-      Eigen::Quaterniond q_BS_;
+      msckf_mono::Vector3<float> p_BS_;
+      msckf_mono::Quaternion<float> q_BS_;
 
       cv::Mat T_BS_;
 
@@ -110,13 +107,13 @@ namespace asl_dataset
       IMU(std::string name, std::string folder);
 
       size_t get_time();
-      msckf::measurement get_data();
+      msckf_mono::imuReading<float> get_data();
       bool next();
       bool has_next();
 
       cv::Mat get_T_BS();
-      Eigen::Vector3d get_p_BS();
-      Eigen::Quaterniond get_q_BS();
+      msckf_mono::Vector3<float> get_p_BS();
+      msckf_mono::Quaternion<float> get_q_BS();
       double get_dT();
       double get_gnd();
       double get_grw();
@@ -132,11 +129,11 @@ namespace asl_dataset
       double dT_;
 
       cv::Mat T_BS_;
-      Eigen::Vector3d p_BS_;
-      Eigen::Quaterniond q_BS_;
+      msckf_mono::Vector3<float> p_BS_;
+      msckf_mono::Quaternion<float> q_BS_;
 
-      std::vector<std::pair<size_t, msckf::measurement>> reading_list_;
-      std::vector<std::pair<size_t, msckf::measurement>>::iterator list_iter_;
+      std::vector<std::pair<size_t, msckf_mono::imuReading<float>>> reading_list_;
+      std::vector<std::pair<size_t, msckf_mono::imuReading<float>>>::iterator list_iter_;
   };
 
   class GroundTruth : public Sensor
@@ -145,17 +142,17 @@ namespace asl_dataset
       GroundTruth(std::string name, std::string folder);
 
       size_t get_time();
-      msckf::imuState get_data();
+      msckf_mono::imuState<float> get_data();
       bool next();
       bool has_next();
 
     private:
       cv::Mat T_BS_;
-      Eigen::Vector3d p_BS_;
-      Eigen::Quaterniond q_BS_;
+      msckf_mono::Vector3<float> p_BS_;
+      msckf_mono::Quaternion<float> q_BS_;
 
 
-      std::vector<std::pair<size_t, msckf::imuState>> reading_list_;
-      std::vector<std::pair<size_t, msckf::imuState>>::iterator list_iter_;
+      std::vector<std::pair<size_t, msckf_mono::imuState<float>>> reading_list_;
+      std::vector<std::pair<size_t, msckf_mono::imuState<float>>>::iterator list_iter_;
   };
 }

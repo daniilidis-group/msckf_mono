@@ -24,12 +24,12 @@ namespace asl_dataset
         }
         }
 
-        Eigen::Matrix3d R_BS;
+        msckf_mono::Matrix3<float> R_BS;
         R_BS << T_BS_.at<float>(0,0), T_BS_.at<float>(0,1), T_BS_.at<float>(0,2),
         T_BS_.at<float>(1,0), T_BS_.at<float>(1,1), T_BS_.at<float>(1,2),
         T_BS_.at<float>(2,0), T_BS_.at<float>(2,1), T_BS_.at<float>(2,2);
 
-        q_BS_ = Eigen::Quaterniond(R_BS).inverse();
+        q_BS_ = msckf_mono::Quaternion<float>(R_BS).inverse();
         p_BS_ << T_BS_.at<float>(0,3), T_BS_.at<float>(1,3), T_BS_.at<float>(2,3);
 
         fs["rate_hz"] >> rate_hz_;
@@ -114,11 +114,11 @@ namespace asl_dataset
     return T_BS_;
   }
 
-  Eigen::Vector3d Camera::get_p_BS()
+  msckf_mono::Vector3<float> Camera::get_p_BS()
   {
     return p_BS_;
   }
-  Eigen::Quaterniond Camera::get_q_BS()
+  msckf_mono::Quaternion<float> Camera::get_q_BS()
   {
     return q_BS_;
   }
@@ -159,11 +159,11 @@ namespace asl_dataset
         }
         }
 
-        Eigen::Matrix3d R_BS;
+        msckf_mono::Matrix3<float> R_BS;
         R_BS << T_BS_.at<float>(0,0), T_BS_.at<float>(0,1), T_BS_.at<float>(0,2),
         T_BS_.at<float>(1,0), T_BS_.at<float>(1,1), T_BS_.at<float>(1,2),
         T_BS_.at<float>(2,0), T_BS_.at<float>(2,1), T_BS_.at<float>(2,2);
-        q_BS_ = Eigen::Quaterniond(R_BS);
+        q_BS_ = msckf_mono::Quaternion<float>(R_BS);
         p_BS_ << T_BS_.at<float>(0,3), T_BS_.at<float>(1,3), T_BS_.at<float>(2,3);
 
 
@@ -183,7 +183,7 @@ namespace asl_dataset
         if( s.rdbuf()->in_avail() == 0 )
         return false;
 
-        std::pair<size_t, msckf::measurement> p;
+        std::pair<size_t, msckf_mono::imuReading<float>> p;
         char c;
         s >> p.first; // timestamp [ns]
         s >> c;
@@ -212,7 +212,7 @@ namespace asl_dataset
     return list_iter_->first;
   }
 
-  msckf::measurement IMU::get_data()
+  msckf_mono::imuReading<float> IMU::get_data()
   {
     return list_iter_->second;
   }
@@ -234,8 +234,8 @@ namespace asl_dataset
 
 
   cv::Mat IMU::get_T_BS(){return T_BS_;}
-  Eigen::Vector3d IMU::get_p_BS(){return p_BS_;}
-  Eigen::Quaterniond IMU::get_q_BS(){return q_BS_;}
+  msckf_mono::Vector3<float> IMU::get_p_BS(){return p_BS_;}
+  msckf_mono::Quaternion<float> IMU::get_q_BS(){return q_BS_;}
   double IMU::get_dT(){return dT_;}
   double IMU::get_gnd(){return gyroscope_noise_density_;}
   double IMU::get_grw(){return gyroscope_random_walk_;}
@@ -258,11 +258,11 @@ namespace asl_dataset
         }
         }
 
-        Eigen::Matrix3d R_BS;
+        msckf_mono::Matrix3<float> R_BS;
         R_BS << T_BS_.at<float>(0,0), T_BS_.at<float>(0,1), T_BS_.at<float>(0,2),
         T_BS_.at<float>(1,0), T_BS_.at<float>(1,1), T_BS_.at<float>(1,2),
         T_BS_.at<float>(2,0), T_BS_.at<float>(2,1), T_BS_.at<float>(2,2);
-        q_BS_ = Eigen::Quaterniond(R_BS);
+        q_BS_ = msckf_mono::Quaternion<float>(R_BS);
         p_BS_ << T_BS_.at<float>(0,3), T_BS_.at<float>(1,3), T_BS_.at<float>(2,3);
 
         return true;
@@ -273,50 +273,59 @@ namespace asl_dataset
         if( s.rdbuf()->in_avail() == 0 )
         return false;
 
-        std::pair<size_t, msckf::imuState> p;
+        std::pair<size_t, msckf_mono::imuState<float> > p;
         char c;
-        p.second.p_I_G_null = Eigen::Vector3d::Zero();
-        p.second.v_I_G_null = Eigen::Vector3d::Zero();
-        p.second.q_IG_null = Eigen::Quaterniond::Identity();
+
+        msckf_mono::Vector3<double> tmp_v;
+        msckf_mono::Quaternion<double> tmp_q;
+
+        p.second.p_I_G_null = msckf_mono::Vector3<float>::Zero();
+        p.second.v_I_G_null = msckf_mono::Vector3<float>::Zero();
+        p.second.q_IG_null = msckf_mono::Quaternion<float>::Identity();
 
         s >> p.first;
         s >> c;
 
-        s >> p.second.p_I_G[0]; //  p_RS_R_x [m]
+        s >> tmp_v[0]; //  p_RS_R_x [m]
         s >> c;
-        s >> p.second.p_I_G[1]; //  p_RS_R_y [m]
+        s >> tmp_v[1]; //  p_RS_R_y [m]
         s >> c;
-        s >> p.second.p_I_G[2]; //  p_RS_R_z [m]
+        s >> tmp_v[2]; //  p_RS_R_z [m]
         s >> c;
+        p.second.p_I_G = tmp_v.cast<float>();
 
-        s >> p.second.q_IG.w(); //  q_RS_w []
+        s >> tmp_q.w(); //  q_RS_w []
         s >> c;
-        s >> p.second.q_IG.x(); //  q_RS_x []
+        s >> tmp_q.x(); //  q_RS_x []
         s >> c;
-        s >> p.second.q_IG.y(); //  q_RS_y []
+        s >> tmp_q.y(); //  q_RS_y []
         s >> c;
-        s >> p.second.q_IG.z(); //  q_RS_z []
+        s >> tmp_q.z(); //  q_RS_z []
         s >> c;
+        p.second.q_IG = tmp_q.cast<float>();
 
-        s >> p.second.v_I_G[0]; //  v_RS_R_x [m s^-1]
+        s >> tmp_v[0]; //  v_RS_R_x [m s^-1]
         s >> c;
-        s >> p.second.v_I_G[1]; //  v_RS_R_y [m s^-1]
+        s >> tmp_v[1]; //  v_RS_R_y [m s^-1]
         s >> c;
-        s >> p.second.v_I_G[2]; //  v_RS_R_z [m s^-1]
+        s >> tmp_v[2]; //  v_RS_R_z [m s^-1]
         s >> c;
+        p.second.v_I_G = tmp_v.cast<float>();
 
-        s >> p.second.b_g[0]; //  b_w_RS_S_x [rad s^-1]
+        s >> tmp_v[0]; //  b_w_RS_S_x [rad s^-1]
         s >> c;
-        s >> p.second.b_g[1]; //  b_w_RS_S_y [rad s^-1]
+        s >> tmp_v[1]; //  b_w_RS_S_y [rad s^-1]
         s >> c;
-        s >> p.second.b_g[2]; //  b_w_RS_S_z [rad s^-1]
+        s >> tmp_v[2]; //  b_w_RS_S_z [rad s^-1]
         s >> c;
+        p.second.b_g = tmp_v.cast<float>();
 
-        s >> p.second.b_a[0]; //  b_w_RS_S_x [rad s^-1]
+        s >> tmp_v[0]; //  b_w_RS_S_x [rad s^-1]
         s >> c;
-        s >> p.second.b_a[1]; //  b_w_RS_S_y [rad s^-1]
+        s >> tmp_v[1]; //  b_w_RS_S_y [rad s^-1]
         s >> c;
-        s >> p.second.b_a[2]; //  b_w_RS_S_z [rad s^-1]
+        s >> tmp_v[2]; //  b_w_RS_S_z [rad s^-1]
+        p.second.b_a = tmp_v.cast<float>();
 
         p.second.g[0] = 0.0;
         p.second.g[1] = 0.0;
@@ -339,7 +348,7 @@ namespace asl_dataset
     return list_iter_->first;
   }
 
-  msckf::imuState GroundTruth::get_data()
+  msckf_mono::imuState<float> GroundTruth::get_data()
   {
     return list_iter_->second;
   }
