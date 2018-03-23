@@ -47,7 +47,6 @@ int main(int argc, char** argv)
 
   std::shared_ptr<IMU> imu0;
   std::shared_ptr<Camera> cam0;
-  std::shared_ptr<Camera> cam1;
   std::shared_ptr<GroundTruth> gt0;
 
   imu0.reset(new IMU("imu0", data_set+"/imu0"));
