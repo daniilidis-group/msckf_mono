@@ -1,5 +1,5 @@
 # msckf_mono
-Monocular MSCKF ROS Node
+Monocular MSCKF with ROS Support
 
 # Euroc Dataset
 Build this project inside of a ROS workspace
