@@ -1,6 +1,10 @@
 # msckf_mono
 Monocular MSCKF with ROS Support
 
+# Requirements
+- ROS Kinetic with Boost, OpenCV and Eigen
+- https://github.com/uzh-rpg/fast build and install according to their instructions
+
 # Euroc Dataset
 Build this project inside of a ROS workspace
 
