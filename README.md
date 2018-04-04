@@ -8,6 +8,15 @@ Monocular MSCKF with ROS Support
 # Euroc Dataset
 Build this project inside of a ROS workspace
 
+Download one (or more) of the datasets from https://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets.
+Place
+```
+%YAML:1.0
+```
+At the top of each YAML file. Currently OpenCV is being used to load these YAMLs and expects this header to exist.
+
+
+Now you can run the MSCKF on the individual sequence
 ```
 roslaunch msckf_mono asl_mskcf.launch data_set_path:=<directory of mav0 inside of sequence> stand_still_end:=<time to start at with dot at the end>
 ```
@@ -26,4 +35,5 @@ We have run this on platforms ranging from the odroid to a modern laptop, so hop
 
 # TODO
 - ROS Node and Nodelet
+- Remove OpenCV from opening YAML files
 - PennCOSYVIO Dataset support
