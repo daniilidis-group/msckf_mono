@@ -34,6 +34,10 @@ The actual MSCKF is fully templated based on the floating point type that you wa
 
 We have run this on platforms ranging from the odroid to a modern laptop, so hopefully it should work on whatever device you want.
 
+# Used in
+The Euroc dataset was evaluated in http://rpg.ifi.uzh.ch/docs/ICRA18_Delmerico.pdf
+The core MSCKF was used in http://openaccess.thecvf.com/content_cvpr_2017/papers/Zhu_Event-Based_Visual_Inertial_CVPR_2017_paper.pdf
+
 # TODO
 - ROS Node and Nodelet
 - Remove OpenCV from opening YAML files
