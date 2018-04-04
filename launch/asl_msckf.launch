@@ -3,13 +3,12 @@
   <arg name="gdb_debug" default="false"/>
   <arg name="profile" default="false"/>
 
+  <arg name="data_set_path" default="/media/jeff/AA5E8AFD5E8AC195/VIO/euroc/MH_03/mav0"/>
+  <arg name="stand_still_end" default="1403637149088318946."/>
+
   <group ns="msckf">
-    <!--
-    <param name="data_set_path" value="/home/ken/datasets/euroc_datasets/MH_05_difficult/mav0"/>
-    <param name="stand_still_end" value="1403638521727829504."/>
-    -->
-    <param name="data_set_path" value="/media/jeff/AA5E8AFD5E8AC195/VIO/euroc/MH_03/mav0"/>
-    <param name="stand_still_end" value="1403637149088318946."/>
+    <param name="data_set_path" value="$(arg data_set_path)"/>
+    <param name="stand_still_end" value="$(arg stand_still_end)"/>
 
     <param name="feature_cov" value="2"/>
 
