@@ -1,19 +1,10 @@
 #include <msckf_mono/corner_detector.h>
+#include <msckf_mono/matrix_utils.h>
 #include <opencv2/calib3d.hpp>
 #include <set>
 
 namespace corner_detector
 {
-
-namespace {
-Eigen::Matrix3d skewsymm(Eigen::Vector3d Vec) {
-  // Returns skew-symmetric form of a 3-d vector
-  Eigen::Matrix3d M;
-  M << 0, -Vec(2), Vec(1), Vec(2), 0, -Vec(0), -Vec(1), Vec(0), 0;
-
-  return M;
-}
-}
 
 CornerDetector::CornerDetector(int n_rows, int n_cols, double detection_threshold) :
   grid_n_rows_(n_rows), grid_n_cols_(n_cols)
@@ -202,7 +193,7 @@ void CornerTracker::track_features(cv::Mat img_1, cv::Mat img_2, Point2fVector& 
 }
 
 TrackHandler::TrackHandler(const cv::Mat K) 
-  : next_feature_id_(0), ransac_threshold_(0.00002),
+  : next_feature_id_(0),
     gyro_accum_(Eigen::Vector3d::Zero()), n_gyro_readings_(0),
     K_(K), K_inv_(K.inv())
 {
@@ -214,106 +205,6 @@ TrackHandler::~TrackHandler()
 
 void TrackHandler::set_grid_size(int n_rows, int n_cols) {
   detector_.set_grid_size(n_rows, n_cols);
-}
-
-void TrackHandler::set_ransac_threshold(double rt){
-  ransac_threshold_ = rt;
-}
-
-// Returns number of outliers
-Eigen::Array<bool, Eigen::Dynamic, 1>
-TrackHandler::twoPointRansac(const Eigen::Matrix3d& dR,
-                             const std::vector<Eigen::Vector2d,
-                             Eigen::aligned_allocator<Eigen::Vector2d>>& old_points_in,
-                             const std::vector<Eigen::Vector2d,
-                             Eigen::aligned_allocator<Eigen::Vector2d>>& new_points_in)
-{
-  assert(old_points_in.size() == new_points_in.size());
-
-  int num_points = old_points_in.size();
-  Eigen::MatrixXd old_points = Eigen::MatrixXd::Zero(3, num_points);
-  Eigen::MatrixXd new_points = Eigen::MatrixXd::Zero(3, num_points);
-
-  old_points.row(2) = Eigen::MatrixXd::Constant(1, num_points, 1);
-  new_points.row(2) = Eigen::MatrixXd::Constant(1, num_points, 1);
-
-  Eigen::Array2d principal_point, focal_length;
-  principal_point << K_.at<float>(0, 2), K_.at<float>(1, 2);
-  focal_length << K_.at<float>(0, 0), K_.at<float>(1, 1);
-
-  int col_iter = 0;
-
-  for (int i=0; i < static_cast<int>(old_points_in.size()); ++i) {
-    Eigen::Vector2d old_point = old_points_in[i];
-    old_point.array() -= principal_point;
-    old_point.array() /= focal_length;
-    old_points.block(0, col_iter, 2, 1) = old_point;
-
-    Eigen::Vector2d new_point = new_points_in[i];
-    new_point.array() -= principal_point;
-    new_point.array() /= focal_length;
-    new_points.block(0, col_iter++, 2, 1) = new_point;
-  }
-
-  if (col_iter < 5)
-  {
-    return Eigen::Array<bool, Eigen::Dynamic, 1>::Constant(num_points, true);
-  }
-
-  old_points.conservativeResize(3, col_iter);
-  new_points.conservativeResize(3, col_iter);
-
-  int num_iters = 300;
-
-  Eigen::Array<bool, Eigen::Dynamic, 1> best_inliers;
-  int most_inliers = -1;
-
-  for (int i=0; i < num_iters; i++)
-  {
-    // Pick two points
-    int ind1 = rand() % col_iter;
-    int ind2 = ind1;
-    while (ind2 == ind1)
-    {
-      ind2 = rand() % col_iter;
-    }
-
-    // Estimate translation
-    Eigen::Matrix<double, 2, 3> M;
-    M <<
-      (dR * old_points.col(ind1)).transpose() * skewsymm(new_points.col(ind1)),
-      (dR * old_points.col(ind2)).transpose() * skewsymm(new_points.col(ind2));
-
-    Eigen::FullPivLU<Eigen::Matrix<double, 2, 3>> lu_decomp(M);
-    Eigen::Vector3d t = lu_decomp.kernel();
-
-    if (t.cols() > 1)
-    {
-      printf("Kernel in RANSAC is the wrong size, returning.");
-      continue;
-    }
-
-    // Compute Sampson Error
-    Eigen::Matrix3d E = skewsymm(t) * dR;
-    Eigen::Array<double, 3, Eigen::Dynamic> Ex1 = E * old_points;
-    Eigen::Array<double, 3, Eigen::Dynamic> Ex2 = E.transpose() * new_points;
-    Eigen::ArrayXd errs = ((new_points.array() * Ex1).colwise().sum()).square();
-    errs /=
-      Ex1.row(0).array().square() +
-      Ex1.row(1).array().square() +
-      Ex2.row(0).array().square() +
-      Ex2.row(1).array().square();
-
-    Eigen::Array<bool, Eigen::Dynamic, 1> inliers = errs < ransac_threshold_;
-    int num_inliers = inliers.count();
-    if (num_inliers > most_inliers)
-    {
-      best_inliers = inliers;
-      most_inliers = num_inliers;
-    }
-  }
-
-  return best_inliers;
 }
 
 void TrackHandler::add_gyro_reading(Eigen::Vector3d& gyro_reading){

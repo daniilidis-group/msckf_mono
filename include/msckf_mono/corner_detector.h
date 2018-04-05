@@ -109,6 +109,8 @@ class TrackHandler
     void predict_features(Point2fVector& predicted_pts);
 
     void track_features(cv::Mat img, Point2fVector& features, IdVector& feature_ids, double cur_time);
+    void new_features(Point2fVector& features, IdVector& feature_ids);
+
     void clear_tracks();
     size_t get_next_feature_id(){return next_feature_id_;}
 

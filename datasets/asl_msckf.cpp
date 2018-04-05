@@ -23,7 +23,7 @@
 
 #include <msckf_mono/CamStates.h>
 
-
+using namespace msckf_mono;
 using namespace asl_dataset;
 using namespace synchronizer;
 
@@ -257,14 +257,11 @@ int main(int argc, char** argv)
         corner_detector::Point2fVector undistorted_pts;
         cv::undistortPoints(points, undistorted_pts, cam0->get_K(), cam0->get_dist_coeffs());
 
-        std::vector<Eigen::Vector2d, Eigen::aligned_allocator<Eigen::Vector2d>> updated_features;
+        std::vector<msckf_mono::Vector2<float>, Eigen::aligned_allocator<msckf_mono::Vector2<float>>> updated_features;
         std::vector<size_t> updated_ids;
-        std::vector<Eigen::Vector2f, Eigen::aligned_allocator<Eigen::Vector2f>> new_features;
+        std::vector<msckf_mono::Vector2<float>, Eigen::aligned_allocator<msckf_mono::Vector2<float>>> new_features;
         std::vector<size_t> new_ids;
-        TEND(feature_tracking_and_warping);
-        TRECORD(feature_tracking_and_warping);
 
-        TSTART(feature_ransac);
         auto last_updated_id = std::find(ids.begin(),
             ids.end(),
             boundry_id);
@@ -279,71 +276,25 @@ int main(int argc, char** argv)
         for(int i=0; i<undistorted_pts.size(); i++){
           size_t id = ids[i];
           if(ids[i]<boundry_id){
-            Eigen::Vector2d feature = { undistorted_pts[i].x, undistorted_pts[i].y };
+            msckf_mono::Vector2<float> feature = { undistorted_pts[i].x, undistorted_pts[i].y };
             updated_features.push_back(feature);
             updated_ids.push_back(id);
           }else{
-            Eigen::Vector2f feature = { undistorted_pts[i].x, undistorted_pts[i].y };
+            msckf_mono::Vector2<float> feature = { undistorted_pts[i].x, undistorted_pts[i].y };
             new_features.push_back(feature);
             new_ids.push_back(id);
           }
         }
-
-        // Get feature positions of active features from the last iteration for RANSAC.
-        corner_detector::Point2fVector undistorted_prev_pts;
-        cv::undistortPoints(th.get_prev_features(),
-            undistorted_prev_pts,
-            cam0->get_K(),
-            cam0->get_dist_coeffs());
-        corner_detector::IdVector prev_ids = th.get_prev_ids();
-
-        std::vector<Eigen::Vector2d,
-          Eigen::aligned_allocator<Eigen::Vector2d>> remaining_prev_pts;
-        remaining_prev_pts.reserve(n_updated);
-        auto prev_pt_iter = undistorted_prev_pts.begin();
-
-        for (int i=0; i < static_cast<int>(undistorted_prev_pts.size()); ++i) {
-          size_t id = prev_ids[i];
-          if (std::find(updated_ids.begin(),
-                updated_ids.end(),
-                prev_ids[i])
-              != updated_ids.end()) {
-            Eigen::Vector2d pt = {undistorted_prev_pts[i].x, undistorted_prev_pts[i].y};
-            remaining_prev_pts.push_back(pt);
-          }
-        }
-
-        auto curr_imu_state = msckf.getImuState();
-        Eigen::Quaterniond curr_rotation = curr_imu_state.q_IG.cast<double>();
-        Eigen::Matrix3d dR = (curr_rotation * prev_rotation.cast<double>().inverse()).toRotationMatrix();
-
-        Eigen::Array<bool, Eigen::Dynamic, 1> inliers = th.twoPointRansac(
-            dR,
-            remaining_prev_pts,
-            updated_features);
-        int n_inliers = inliers.count();
-
-        std::vector<Eigen::Vector2f, Eigen::aligned_allocator<Eigen::Vector2f>> final_features;
-        final_features.reserve(n_inliers);
-        corner_detector::IdVector final_ids;
-        final_ids.reserve(n_inliers);
-
-        for (int i=0; i < inliers.size(); ++i) {
-          if (inliers(i)) {
-            final_features.push_back(updated_features[i].cast<float>());
-            final_ids.push_back(updated_ids[i]);
-          }
-        }
-        TEND(feature_ransac);
-        TRECORD(feature_ransac);
-
+        TEND(feature_tracking_and_warping);
+        TRECORD(feature_tracking_and_warping);
+        
         TSTART(msckf_augment_state);
         msckf.augmentState(state_k, ((float)imu0->get_time())/1e9);
         TEND(msckf_augment_state);
         TRECORD(msckf_augment_state);
 
         TSTART(msckf_update);
-        msckf.update(final_features, final_ids);
+        msckf.update(updated_features, updated_ids);
         TEND(msckf_update);
         TRECORD(msckf_update);
 
