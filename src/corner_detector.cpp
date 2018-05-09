@@ -5,18 +5,9 @@
 namespace corner_detector
 {
 
-namespace {
-Eigen::Matrix3d skewsymm(Eigen::Vector3d Vec) {
-  // Returns skew-symmetric form of a 3-d vector
-  Eigen::Matrix3d M;
-  M << 0, -Vec(2), Vec(1), Vec(2), 0, -Vec(0), -Vec(1), Vec(0), 0;
-
-  return M;
-}
-}
-
 CornerDetector::CornerDetector(int n_rows, int n_cols, double detection_threshold) :
-  grid_n_rows_(n_rows), grid_n_cols_(n_cols)
+  grid_n_rows_(n_rows), grid_n_cols_(n_cols),
+  detection_threshold_(detection_threshold)
 {
   occupancy_grid_.clear();
   occupancy_grid_.resize(grid_n_rows_*grid_n_cols_, false);
@@ -175,7 +166,8 @@ void CornerTracker::track_features(cv::Mat img_1, cv::Mat img_2, Point2fVector& 
                            points1, points2,
                            status, err,
                            window_size_, max_level_,
-                           termination_criteria_, 0, min_eigen_threshold_);
+                           termination_criteria_,
+                           cv::OPTFLOW_USE_INITIAL_FLOW, min_eigen_threshold_);
 
   int h = img_1.rows;
   int w = img_1.cols;
@@ -201,12 +193,17 @@ void CornerTracker::track_features(cv::Mat img_1, cv::Mat img_2, Point2fVector& 
   }
 }
 
-TrackHandler::TrackHandler(const cv::Mat K) 
-  : next_feature_id_(0), ransac_threshold_(0.00002),
-    gyro_accum_(Eigen::Vector3d::Zero()), n_gyro_readings_(0),
-    K_(K), K_inv_(K.inv())
+TrackHandler::TrackHandler(const cv::Mat K,
+    const cv::Mat distortion_coeffs, const std::string dist_model) 
+  : ransac_threshold_(0.0000002), next_feature_id_(0),
+    gyro_accum_(Eigen::Vector3f::Zero()), n_gyro_readings_(0),
+    K_(K), K_inv_(K.inv()), distortion_coeffs_(distortion_coeffs),
+    distortion_model_(dist_model)
 {
+  dR_ = cv::Mat::eye(3,3,CV_32F);
   clear_tracks();
+
+  tracker_.configure(51, 0.00001, 4, 30, 1.);
 }
 
 TrackHandler::~TrackHandler()
@@ -216,115 +213,19 @@ void TrackHandler::set_grid_size(int n_rows, int n_cols) {
   detector_.set_grid_size(n_rows, n_cols);
 }
 
-void TrackHandler::set_ransac_threshold(double rt){
-  ransac_threshold_ = rt;
-}
-
-// Returns number of outliers
-Eigen::Array<bool, Eigen::Dynamic, 1>
-TrackHandler::twoPointRansac(const Eigen::Matrix3d& dR,
-                             const std::vector<Eigen::Vector2d,
-                             Eigen::aligned_allocator<Eigen::Vector2d>>& old_points_in,
-                             const std::vector<Eigen::Vector2d,
-                             Eigen::aligned_allocator<Eigen::Vector2d>>& new_points_in)
-{
-  assert(old_points_in.size() == new_points_in.size());
-
-  int num_points = old_points_in.size();
-  Eigen::MatrixXd old_points = Eigen::MatrixXd::Zero(3, num_points);
-  Eigen::MatrixXd new_points = Eigen::MatrixXd::Zero(3, num_points);
-
-  old_points.row(2) = Eigen::MatrixXd::Constant(1, num_points, 1);
-  new_points.row(2) = Eigen::MatrixXd::Constant(1, num_points, 1);
-
-  Eigen::Array2d principal_point, focal_length;
-  principal_point << K_.at<float>(0, 2), K_.at<float>(1, 2);
-  focal_length << K_.at<float>(0, 0), K_.at<float>(1, 1);
-
-  int col_iter = 0;
-
-  for (int i=0; i < static_cast<int>(old_points_in.size()); ++i) {
-    Eigen::Vector2d old_point = old_points_in[i];
-    old_point.array() -= principal_point;
-    old_point.array() /= focal_length;
-    old_points.block(0, col_iter, 2, 1) = old_point;
-
-    Eigen::Vector2d new_point = new_points_in[i];
-    new_point.array() -= principal_point;
-    new_point.array() /= focal_length;
-    new_points.block(0, col_iter++, 2, 1) = new_point;
-  }
-
-  if (col_iter < 5)
-  {
-    return Eigen::Array<bool, Eigen::Dynamic, 1>::Constant(num_points, true);
-  }
-
-  old_points.conservativeResize(3, col_iter);
-  new_points.conservativeResize(3, col_iter);
-
-  int num_iters = 300;
-
-  Eigen::Array<bool, Eigen::Dynamic, 1> best_inliers;
-  int most_inliers = -1;
-
-  for (int i=0; i < num_iters; i++)
-  {
-    // Pick two points
-    int ind1 = rand() % col_iter;
-    int ind2 = ind1;
-    while (ind2 == ind1)
-    {
-      ind2 = rand() % col_iter;
-    }
-
-    // Estimate translation
-    Eigen::Matrix<double, 2, 3> M;
-    M <<
-      (dR * old_points.col(ind1)).transpose() * skewsymm(new_points.col(ind1)),
-      (dR * old_points.col(ind2)).transpose() * skewsymm(new_points.col(ind2));
-
-    Eigen::FullPivLU<Eigen::Matrix<double, 2, 3>> lu_decomp(M);
-    Eigen::Vector3d t = lu_decomp.kernel();
-
-    if (t.cols() > 1)
-    {
-      printf("Kernel in RANSAC is the wrong size, returning.");
-      continue;
-    }
-
-    // Compute Sampson Error
-    Eigen::Matrix3d E = skewsymm(t) * dR;
-    Eigen::Array<double, 3, Eigen::Dynamic> Ex1 = E * old_points;
-    Eigen::Array<double, 3, Eigen::Dynamic> Ex2 = E.transpose() * new_points;
-    Eigen::ArrayXd errs = ((new_points.array() * Ex1).colwise().sum()).square();
-    errs /=
-      Ex1.row(0).array().square() +
-      Ex1.row(1).array().square() +
-      Ex2.row(0).array().square() +
-      Ex2.row(1).array().square();
-
-    Eigen::Array<bool, Eigen::Dynamic, 1> inliers = errs < ransac_threshold_;
-    int num_inliers = inliers.count();
-    if (num_inliers > most_inliers)
-    {
-      best_inliers = inliers;
-      most_inliers = num_inliers;
-    }
-  }
-
-  return best_inliers;
-}
-
-void TrackHandler::add_gyro_reading(Eigen::Vector3d& gyro_reading){
+void TrackHandler::add_gyro_reading(Eigen::Vector3f& gyro_reading){
   gyro_accum_ += gyro_reading;
   n_gyro_readings_++;
 }
 
-cv::Mat TrackHandler::integrate_gyro(){
+void TrackHandler::integrate_gyro(){
   double dt = cur_time_-prev_time_;
 
-  gyro_accum_ /= static_cast<float>(n_gyro_readings_);
+  if(n_gyro_readings_>0){
+    gyro_accum_ /= static_cast<float>(n_gyro_readings_);
+  }else{
+    gyro_accum_.setZero();
+  }
   gyro_accum_ *= dt;
 
   cv::Mat r(3,1, CV_32F);
@@ -334,18 +235,23 @@ cv::Mat TrackHandler::integrate_gyro(){
   cv::Mat dR = cv::Mat::eye(3,3,CV_32F);
   cv::Rodrigues(r, dR);
 
-  gyro_accum_ = Eigen::Vector3d::Zero();
+  gyro_accum_ = Eigen::Vector3f::Zero();
   n_gyro_readings_ = 0;
 
-  return dR;
+  dR_ = dR;
+
+  return;
 }
 
-void TrackHandler::predict_features(Point2fVector& predicted_pts){
-  predicted_pts.clear();
-  cv::Mat R = integrate_gyro();
+void TrackHandler::predict_features(){
+  std::copy(prev_feature_ids_.begin(),
+      prev_feature_ids_.end(),
+      std::back_inserter(cur_feature_ids_));
+
+  integrate_gyro();
 
   // homography by rotation
-  cv::Mat H = K_ * R * K_inv_;
+  cv::Mat H = K_ * dR_ * K_inv_;
   cv::Mat pt_buf1(3,1,CV_32F);
   pt_buf1.at<float>(2) = 1.0;
 
@@ -360,68 +266,35 @@ void TrackHandler::predict_features(Point2fVector& predicted_pts){
     Point2f new_point;
     new_point.x = pt_buf2.at<float>(0) / pt_buf2.at<float>(2);
     new_point.y = pt_buf2.at<float>(1) / pt_buf2.at<float>(2);
-    predicted_pts.push_back(new_point);
+    cur_features_.push_back(new_point);
   }
 }
 
-void TrackHandler::track_features(cv::Mat img, Point2fVector& features, IdVector& feature_ids, double cur_time)
+void TrackHandler::set_current_image(cv::Mat img, double time)
 {
-  cur_time_ = cur_time;
-  // sanatize inputs
-  features.clear();
-  features.reserve(prev_features_.size());
+  // Move current to previous
+  prev_time_ = cur_time_;
+  prev_img_ = cur_img_;
+  prev_features_ = cur_features_;
+  prev_feature_ids_ = cur_feature_ids_;
+  std::copy(new_feature_ids_.begin(),
+            new_feature_ids_.end(),
+            std::back_inserter(prev_feature_ids_));
+  std::copy(new_features_.begin(),
+            new_features_.end(),
+            std::back_inserter(prev_features_));
 
-  feature_ids.clear();
-  feature_ids.reserve(prev_feature_ids_.size());
-
-  // previous features exist for optical flow to work
-  // this fills features with all tracked features from the previous frame
-  // also handles the transfer of ids
-  size_t prev_size = prev_features_.size();
-  if(prev_features_.size() != 0){
-    std::copy(prev_feature_ids_.begin(),
-              prev_feature_ids_.end(),
-              std::back_inserter(feature_ids));
-
-    predict_features(features);
-
-    visualizer_.add_predicted(features, feature_ids);
-
-    tracker_.track_features(prev_img_, img,
-                            prev_features_, features,
-                            prev_feature_ids_, feature_ids);
-  }
-
-
-  // flag all grid positions that already have a feature in it
-  for(auto& f: features){
-    detector_.set_grid_position(f);
-  }
-  Point2fVector new_features;
-  detector_.detect_features(img, new_features);
-
-  // fill all new features into place
-  std::copy(new_features.begin(), new_features.end(), std::back_inserter(features));
-
-  // generate ids for the new features
-  feature_ids.reserve(feature_ids.size()+new_features.size());
-  next_feature_id_++;
-  for(int i=0; i<new_features.size(); i++){
-    feature_ids.push_back(next_feature_id_);
-    next_feature_id_++;
-  }
-  
+  // enforce grid on features
   int rows = detector_.get_n_rows();
   int cols = detector_.get_n_cols();
   std::vector<bool> oc_grid(rows*cols, false);
-
-  auto f_it=features.begin();
-  auto fid_it=feature_ids.begin();
-  for(;f_it!=features.end() && fid_it!=feature_ids.end();){
+  auto f_it=prev_features_.begin();
+  auto fid_it=prev_feature_ids_.begin();
+  for(;f_it!=prev_features_.end() && fid_it!=prev_feature_ids_.end();){
     int ind = detector_.sub2ind(*f_it);
     if(oc_grid[ind]){
-      f_it = features.erase(f_it);
-      fid_it = feature_ids.erase(fid_it);
+      f_it = prev_features_.erase(f_it);
+      fid_it = prev_feature_ids_.erase(fid_it);
     }else{
       oc_grid[ind] = true;
       f_it++;
@@ -429,12 +302,243 @@ void TrackHandler::track_features(cv::Mat img, Point2fVector& features, IdVector
     }
   }
 
-  prev_img_ = img;
-  prev_features_ = features;
-  prev_feature_ids_ = feature_ids;
-  prev_time_ = cur_time_;
+  // Set the current
+  cur_time_ = time;
+  cur_img_ = img;
+  cur_features_.clear();
+  cur_feature_ids_.clear();
 
-  visualizer_.add_current_features(prev_features_, prev_feature_ids_);
+  new_features_.clear();
+  new_feature_ids_.clear();
+}
+
+void TrackHandler::tracked_features(OutFeatureVector& features, IdVector& feature_ids)
+{
+  // sanatize inputs
+  cur_features_.reserve(prev_features_.size());
+  cur_feature_ids_.reserve(prev_feature_ids_.size());
+
+  // previous features exist for optical flow to work
+  // this fills features with all tracked features from the previous frame
+  // also handles the transfer of ids
+  size_t prev_size = prev_features_.size();
+  if(prev_features_.size() != 0){
+    predict_features(); // populate cur_features_
+
+    visualizer_.add_predicted(cur_features_, cur_feature_ids_);
+
+    tracker_.track_features(prev_img_, cur_img_,
+                            prev_features_, cur_features_,
+                            prev_feature_ids_, cur_feature_ids_);
+  }
+
+  visualizer_.add_current_features(cur_features_, cur_feature_ids_);
+
+  features.clear();
+  feature_ids.clear();
+  if(cur_features_.size()>0){
+    Point2fVector undistorted_prev_pts;
+
+    undistortPoints(prev_features_, undistorted_prev_pts);
+
+    Point2fVector undistorted_cur_pts;
+    undistortPoints(cur_features_, undistorted_cur_pts);
+
+    OutFeatureVector prev_features;
+    prev_features.reserve(prev_features_.size());
+    std::transform(undistorted_prev_pts.begin(), undistorted_prev_pts.end(), std::back_inserter(prev_features),
+        [](const cv::Point2f& pt){return msckf_mono::Vector2<float>{ pt.x, pt.y };});
+
+    OutFeatureVector cur_features;
+    cur_features.reserve(cur_features_.size());
+    std::transform(undistorted_cur_pts.begin(), undistorted_cur_pts.end(), std::back_inserter(cur_features),
+        [](const cv::Point2f& pt){return msckf_mono::Vector2<float>{ pt.x, pt.y };});
+
+    msckf_mono::Matrix3<float> dR;
+    for(int i=0; i<3; i++)
+      for(int j=0; j<3; j++)
+        dR(i,j) = dR_.at<float>(i,j);
+
+    if(cur_features.size() > 5){
+      auto valid_pts = twoPointRansac(dR, prev_features, cur_features);
+
+      auto ocf_it = cur_features.begin();
+      auto cf_it = cur_features_.begin();
+      auto cfi_it = cur_feature_ids_.begin();
+
+      for(int i=0; i<cur_features.size(); i++){
+        if(!valid_pts[i]){
+          ocf_it = cur_features.erase(ocf_it);
+          cf_it = cur_features_.erase(cf_it);
+          cfi_it = cur_feature_ids_.erase(cfi_it);
+        }else{
+          ocf_it++;
+          cf_it++;
+          cfi_it++;
+        }
+      }
+    }
+
+    features.clear();
+    std::copy(cur_features.begin(), cur_features.end(),
+        std::back_inserter(features));
+
+    feature_ids.clear();
+    std::copy(cur_feature_ids_.begin(), cur_feature_ids_.end(),
+        std::back_inserter(feature_ids));
+  }
+}
+
+void TrackHandler::new_features(OutFeatureVector& features, IdVector& feature_ids) {
+  // flag all grid positions that already have a feature in it
+  for(const auto& f: cur_features_){
+    detector_.set_grid_position(f);
+  }
+  detector_.detect_features(cur_img_, new_features_);
+  std::cout << "[Detector] Found " << new_features_.size()
+            << " new features" << std::endl;
+
+  // generate ids for the new features
+  new_feature_ids_.reserve(feature_ids.size()+new_features_.size());
+  next_feature_id_++;
+  for(int i=0; i<new_features_.size(); i++){
+    new_feature_ids_.push_back(next_feature_id_);
+    next_feature_id_++;
+  }
+
+  visualizer_.add_new_features(new_features_, new_feature_ids_);
+
+  features.clear();
+  feature_ids.clear();
+
+  if(new_features_.size()){
+    Point2fVector undistorted_pts;
+    undistortPoints(new_features_, undistorted_pts);
+
+    features.reserve(new_features_.size());
+    std::transform(undistorted_pts.begin(), undistorted_pts.end(), std::back_inserter(features),
+        [](const cv::Point2f& pt){return msckf_mono::Vector2<float>{ pt.x, pt.y };});
+
+    std::copy(new_feature_ids_.begin(), new_feature_ids_.end(),
+        std::back_inserter(feature_ids));
+  }
+}
+
+void TrackHandler::undistortPoints(Point2fVector& in, Point2fVector& out){
+  if (distortion_model_ == "radtan") {
+    cv::undistortPoints(in, out, K_, distortion_coeffs_);
+  } else if (distortion_model_ == "equidistant") {
+    cv::fisheye::undistortPoints(in, out, K_, distortion_coeffs_);
+  } else {
+    cv::undistortPoints(in, out, K_, distortion_coeffs_);
+  }
+}
+ 
+void TrackHandler::set_ransac_threshold(double rt){
+  ransac_threshold_ = rt;
+}
+
+Eigen::Array<bool, 1, Eigen::Dynamic>
+TrackHandler::twoPointRansac(const msckf_mono::Matrix3<float>& dR,
+                             const OutFeatureVector& old_points_in,
+                             const OutFeatureVector& new_points_in)
+{
+  assert(old_points_in.size() == new_points_in.size());
+
+  int num_points = old_points_in.size();
+
+  Eigen::Matrix<float, 3, Eigen::Dynamic> old_points(3, num_points);
+  old_points.setZero();
+  old_points.row(2) = Eigen::MatrixXf::Constant(1, num_points, 1);
+
+  Eigen::Matrix<float, 3, Eigen::Dynamic> new_points(3, num_points);
+  new_points.setZero();
+  new_points.row(2) = Eigen::MatrixXf::Constant(1, num_points, 1);
+
+  Eigen::Array<float, 2, 1> principal_point, focal_length;
+  principal_point << K_.at<float>(0, 2), K_.at<float>(1, 2);
+  focal_length << K_.at<float>(0, 0), K_.at<float>(1, 1);
+
+  int col_iter = 0;
+
+  for (int i=0; i < static_cast<int>(old_points_in.size()); ++i) {
+    msckf_mono::Vector2<float> old_point = old_points_in[i];
+    old_point.array() -= principal_point;
+    old_point.array() /= focal_length;
+    old_points.block(0, col_iter, 2, 1) = old_point;
+
+    msckf_mono::Vector2<float> new_point = new_points_in[i];
+    new_point.array() -= principal_point;
+    new_point.array() /= focal_length;
+    new_points.block(0, col_iter++, 2, 1) = new_point;
+  }
+
+  if (col_iter < 5)
+  {
+    return Eigen::Array<bool, Eigen::Dynamic, 1>::Constant(num_points, true);
+  }
+
+  int num_iters = 300;
+
+  Eigen::Array<bool, 1, Eigen::Dynamic> best_inliers;
+  int most_inliers = -1;
+
+  for (int i=0; i < num_iters; i++)
+  {
+    // Pick two points
+    int ind1 = rand() % col_iter;
+    int ind2 = ind1;
+    while (ind2 == ind1)
+    {
+      ind2 = rand() % col_iter;
+    }
+
+    // Estimate translation
+    msckf_mono::Vector3<float> t;
+
+    Eigen::Matrix<float, 2, 3> M;
+    const msckf_mono::Vector3<float> c1 = new_points.col(ind1);
+
+    const msckf_mono::Vector3<float> c2 = new_points.col(ind2);
+
+    M <<
+      (dR * old_points.col(ind1)).transpose() * msckf_mono::vectorToSkewSymmetric(c1),
+      (dR * old_points.col(ind2)).transpose() * msckf_mono::vectorToSkewSymmetric(c2);
+
+    if(!M.isZero(1e-9)){
+      Eigen::FullPivLU<Eigen::Matrix<float, 2, 3>> lu_decomp(M);
+      t = lu_decomp.kernel();
+    }else{
+      t.setZero();
+    }
+
+    if (t.cols() > 1)
+    {
+      printf("Kernel in RANSAC is the wrong size, returning.");
+      continue;
+    }
+
+    // Compute Sampson Error
+    msckf_mono::Matrix3<float> E = msckf_mono::vectorToSkewSymmetric(t) * dR;
+    Eigen::Array<float, 3, Eigen::Dynamic> Ex1 = E * old_points;
+    Eigen::Array<float, 3, Eigen::Dynamic> Ex2 = E.transpose() * new_points;
+    Eigen::Array<float, Eigen::Dynamic, Eigen::Dynamic> errs = ((new_points.array() * Ex1).colwise().sum()).square();
+    errs /=
+      Ex1.row(0).array().square() +
+      Ex1.row(1).array().square() +
+      Ex2.row(0).array().square() +
+      Ex2.row(1).array().square();
+
+    Eigen::Array<bool, 1, Eigen::Dynamic> inliers = errs < ransac_threshold_;
+    int num_inliers = inliers.count();
+    if (num_inliers > most_inliers)
+    {
+      best_inliers = inliers;
+      most_inliers = num_inliers;
+    }
+  }
+
+  return best_inliers;
 }
 
 void TrackHandler::clear_tracks()
@@ -457,15 +561,13 @@ TrackVisualizer::TrackVisualizer()
 
 void TrackVisualizer::add_predicted(Point2fVector& features, IdVector& feature_ids)
 {
-  assert(features.size()==feature_ids.size());
+  assert(fetures.size()==feature_ids.size());
   predicted_pts_.clear();
 
   auto fit=features.begin();
   auto idit=feature_ids.begin();
-  for(;fit!=features.end();++fit, ++idit){
-    size_t id = *idit;
-
-    predicted_pts_[id] = *fit;
+  for(;fit!=features.end() && idit!=feature_ids.end();++fit, ++idit){
+    predicted_pts_.emplace(*idit, *fit);
   }
 }
 
@@ -475,12 +577,12 @@ void TrackVisualizer::add_current_features(Point2fVector& features, IdVector& fe
   std::set<size_t> current_ids;
   auto fit=features.begin();
   auto idit=feature_ids.begin();
-  for(;fit!=features.end();++fit, ++idit){
+  for(;fit!=features.end() && idit!=feature_ids.end();++fit, ++idit){
     size_t id = *idit;
 
     current_ids.insert(id);
     if(feature_tracks_.find(id)==feature_tracks_.end()){
-      feature_tracks_.insert(std::make_pair(id, Point2fVector()));
+      feature_tracks_.emplace(*idit, Point2fVector());
     }
 
     feature_tracks_[id].push_back(*fit);
@@ -493,6 +595,22 @@ void TrackVisualizer::add_current_features(Point2fVector& features, IdVector& fe
 
   for(auto id : to_remove)
     feature_tracks_.erase(id);
+}
+
+void TrackVisualizer::add_new_features(Point2fVector& features, IdVector& feature_ids)
+{
+  assert(features.size()==feature_ids.size());
+  auto fit=features.begin();
+  auto idit=feature_ids.begin();
+  for(;fit!=features.end();++fit, ++idit){
+    size_t id = *idit;
+
+    if(feature_tracks_.find(id)==feature_tracks_.end()){
+      feature_tracks_.insert(std::make_pair(id, Point2fVector()));
+    }
+
+    feature_tracks_[id].push_back(*fit);
+  }
 }
 
 cv::Mat TrackVisualizer::draw_tracks(cv::Mat image)

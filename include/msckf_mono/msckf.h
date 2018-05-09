@@ -1269,10 +1269,7 @@ namespace msckf_mono {
 
           _S pos_covar = cov_diag.segment(12, 3).norm();
 
-          _S cost_threshold = msckf_params_.max_gn_cost_norm;
-          // if (pos_covar > 2)
-
-          if (normalized_cost > cost_threshold) {
+          if (normalized_cost > msckf_params_.max_gn_cost_norm) {
             is_valid_solution = false;
           }
 

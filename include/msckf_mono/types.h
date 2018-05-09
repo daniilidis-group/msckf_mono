@@ -95,7 +95,7 @@ namespace msckf_mono {
     struct MSCKFParams {
       _Scalar max_gn_cost_norm, min_rcond, translation_threshold;
       _Scalar redundancy_angle_thresh, redundancy_distance_thresh;
-      size_t min_track_length, max_track_length, max_cam_states;
+      int min_track_length, max_track_length, max_cam_states;
     };
 
   template <typename _Scalar>

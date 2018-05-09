@@ -23,7 +23,11 @@ find_package(OpenCV REQUIRED)
 # separate install -- https://github.com/uzh-rpg/fast
 find_package(fast REQUIRED)
 
-find_package(catkin REQUIRED COMPONENTS roscpp image_transport cv_bridge sensor_msgs
+find_package(catkin REQUIRED COMPONENTS
+    roscpp
+    image_transport
+    cv_bridge
+    sensor_msgs
     pcl_conversions
     pcl_ros
     message_generation
@@ -80,6 +84,7 @@ LIST(APPEND LINK_LIBS
 
 LIST(APPEND MSCKF_SRCS
   src/corner_detector.cpp
+  src/ros_interface.cpp
   )
 
 add_library(msckf_mono
@@ -91,6 +96,9 @@ target_link_libraries(msckf_mono
 
 add_executable(asl_msckf datasets/asl_msckf.cpp datasets/asl_readers.cpp)
 target_link_libraries(asl_msckf msckf_mono ${LINK_LIBS})
+
+add_executable(msckf_mono_node nodes/msckf_mono_node.cpp)
+target_link_libraries(msckf_mono_node msckf_mono ${LINK_LIBS})
 
 # add_executable(pcv_msckf datasets/penncosy_msckf.cpp datasets/penncosy_readers.cpp)
 # target_link_libraries(pcv_msckf ${LINK_LIBS} msckf_mono)
