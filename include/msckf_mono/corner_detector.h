@@ -20,11 +20,17 @@
 // Eigen
 #include <Eigen/Dense>
 
+// Matrix utils & types
+#include <msckf_mono/matrix_utils.h>
+
 namespace corner_detector
 {
 typedef cv::Point2f Point2f; 
 typedef std::vector<cv::Point2f> Point2fVector;
 typedef std::vector<size_t> IdVector;
+typedef std::vector<msckf_mono::Vector2<float>,
+                    Eigen::aligned_allocator<msckf_mono::Vector2<float>>>
+                      OutFeatureVector;
 
 class CornerDetector{
 public:
@@ -51,9 +57,9 @@ private:
 class CornerTracker
 {
   public:
-    CornerTracker(int window_size=31,
+    CornerTracker(int window_size=51,
                   double min_eigen_threshold=0.001,
-                  int max_level=3,
+                  int max_level=5,
                   int termcrit_max_iters=50,
                   double termcirt_epsilon=0.01);
 
@@ -82,6 +88,7 @@ class TrackVisualizer
     TrackVisualizer();
 
     void add_current_features(Point2fVector& features, IdVector& feature_ids);
+    void add_new_features(Point2fVector& features, IdVector& feature_ids);
     void add_predicted(Point2fVector& features, IdVector& feature_ids);
 
     cv::Mat draw_tracks(cv::Mat img);
@@ -94,22 +101,14 @@ class TrackVisualizer
 class TrackHandler
 {
   public:
-    TrackHandler(const cv::Mat K);
+    TrackHandler(const cv::Mat K, const cv::Mat dist_coeffs, const std::string dist_model);
     ~TrackHandler();
 
-    Eigen::Array<bool, Eigen::Dynamic, 1>
-      twoPointRansac(const Eigen::Matrix3d& dR,
-          const std::vector<Eigen::Vector2d,
-          Eigen::aligned_allocator<Eigen::Vector2d>>& old_points_in,
-          const std::vector<Eigen::Vector2d,
-          Eigen::aligned_allocator<Eigen::Vector2d>>& new_points_in);
+    void add_gyro_reading(Eigen::Vector3f& gyro_reading);
 
-    void add_gyro_reading(Eigen::Vector3d& gyro_reading);
-    cv::Mat integrate_gyro();
-    void predict_features(Point2fVector& predicted_pts);
-
-    void track_features(cv::Mat img, Point2fVector& features, IdVector& feature_ids, double cur_time);
-    void new_features(Point2fVector& features, IdVector& feature_ids);
+    void set_current_image(cv::Mat img, double time);
+    void tracked_features(OutFeatureVector& features, IdVector& feature_ids);
+    void new_features(OutFeatureVector& features, IdVector& feature_ids);
 
     void clear_tracks();
     size_t get_next_feature_id(){return next_feature_id_;}
@@ -123,22 +122,42 @@ class TrackHandler
     cv::Mat get_track_image();
 
   private:
+    Eigen::Array<bool, 1, Eigen::Dynamic>
+    twoPointRansac(const msckf_mono::Matrix3<float>& dR,
+                   const OutFeatureVector& old_points_in,
+                   const OutFeatureVector& new_points_in);
+
+    void undistortPoints(Point2fVector& in, Point2fVector& out);
+
+    void integrate_gyro();
+    void predict_features();
+
+    cv::Mat dR_;
+
     double ransac_threshold_;
     CornerDetector detector_;
     CornerTracker tracker_;
     
     double cur_time_;
+    cv::Mat cur_img_;
+    Point2fVector cur_features_;
+    IdVector cur_feature_ids_;
 
+    Point2fVector new_features_;
+    IdVector new_feature_ids_;
+
+    double prev_time_;
     cv::Mat prev_img_;
     Point2fVector prev_features_;
     IdVector prev_feature_ids_;
-    double prev_time_;
-
-    Eigen::Vector3d gyro_accum_;
-    size_t n_gyro_readings_;
 
     size_t next_feature_id_;
 
+    Eigen::Vector3f gyro_accum_;
+    size_t n_gyro_readings_;
+
+    const std::string distortion_model_;
+    const cv::Mat distortion_coeffs_;
     const cv::Mat K_;
     const cv::Mat K_inv_;
 
