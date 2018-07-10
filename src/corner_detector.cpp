@@ -206,19 +206,18 @@ TrackHandler::TrackHandler(const cv::Mat K,
   tracker_.configure(51, 0.00001, 4, 30, 1.);
 }
 
-TrackHandler::~TrackHandler()
-{}
+TrackHandler::~TrackHandler() {}
 
 void TrackHandler::set_grid_size(int n_rows, int n_cols) {
   detector_.set_grid_size(n_rows, n_cols);
 }
 
-void TrackHandler::add_gyro_reading(Eigen::Vector3f& gyro_reading){
+void TrackHandler::add_gyro_reading(Eigen::Vector3f& gyro_reading) {
   gyro_accum_ += gyro_reading;
   n_gyro_readings_++;
 }
 
-void TrackHandler::integrate_gyro(){
+void TrackHandler::integrate_gyro() {
   double dt = cur_time_-prev_time_;
 
   if(n_gyro_readings_>0){
@@ -235,7 +234,7 @@ void TrackHandler::integrate_gyro(){
   cv::Mat dR = cv::Mat::eye(3,3,CV_32F);
   cv::Rodrigues(r, dR);
 
-  gyro_accum_ = Eigen::Vector3f::Zero();
+  gyro_accum_.setZero();
   n_gyro_readings_ = 0;
 
   dR_ = dR;
@@ -338,7 +337,6 @@ void TrackHandler::tracked_features(OutFeatureVector& features, IdVector& featur
   feature_ids.clear();
   if(cur_features_.size()>0){
     Point2fVector undistorted_prev_pts;
-
     undistortPoints(prev_features_, undistorted_prev_pts);
 
     Point2fVector undistorted_cur_pts;
@@ -395,8 +393,8 @@ void TrackHandler::new_features(OutFeatureVector& features, IdVector& feature_id
     detector_.set_grid_position(f);
   }
   detector_.detect_features(cur_img_, new_features_);
-  std::cout << "[Detector] Found " << new_features_.size()
-            << " new features" << std::endl;
+  //std::cout << "[Detector] Found " << new_features_.size()
+  //          << " new features" << std::endl;
 
   // generate ids for the new features
   new_feature_ids_.reserve(feature_ids.size()+new_features_.size());

@@ -3,11 +3,13 @@
   <arg name="gdb_debug" default="false"/>
   <arg name="profile" default="false"/>
 
-  <arg name="data_set_path" default="/media/jeff/AA5E8AFD5E8AC195/VIO/euroc/MH_03/mav0"/>
-  <arg name="stand_still_end" default="1403637149088318946."/>
+  <arg name="data_set_path" default="/home/ken/datasets/euroc/MH_03/mav0"/>
+  <arg name="stand_still_start" default="1403637142538319104."/>
+  <arg name="stand_still_end"   default="1403637149088318946."/>
 
   <group ns="msckf">
     <param name="data_set_path" value="$(arg data_set_path)"/>
+    <param name="stand_still_start" value="$(arg stand_still_start)"/>
     <param name="stand_still_end" value="$(arg stand_still_end)"/>
 
     <param name="feature_cov" value="2"/>
@@ -38,11 +40,11 @@
     <param name="n_grid_cols" value="10"/>
 
     <group unless="$(arg profile)">
-      <node pkg="msckf_mono" name="asl_msckf" type="asl_msckf" unless="$(arg gdb_debug)" output="screen"/>
-      <node pkg="msckf_mono" name="asl_msckf" type="asl_msckf" launch-prefix="xterm -e gdb --args" if="$(arg gdb_debug)"/>
+      <node pkg="msckf_mono" name="asl_msckf" type="asl_msckf_no_ground_truth" unless="$(arg gdb_debug)" output="screen"/>
+      <node pkg="msckf_mono" name="asl_msckf" type="asl_msckf_no_ground_truth" launch-prefix="xterm -e gdb --args" if="$(arg gdb_debug)"/>
     </group>
     <group if="$(arg profile)">
-      <node pkg="msckf_mono" name="asl_msckf" type="asl_msckf" launch-prefix="perf record -g --call-graph dwarf --output=perf.out.node_name.data --" if="$(arg profile)"/>
+      <node pkg="msckf_mono" name="asl_msckf" type="asl_msckf_no_ground_truth" launch-prefix="perf record -g --call-graph dwarf --output=perf.out.node_name.data --" if="$(arg profile)"/>
     </group>
 
     <node pkg="rviz" name="msckf_rviz" type="rviz" args="-d $(find msckf_mono)/launch/asl_msckf.rviz"/>

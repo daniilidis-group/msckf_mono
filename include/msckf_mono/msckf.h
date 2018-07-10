@@ -1420,10 +1420,10 @@ namespace msckf_mono {
             return;
         }
 
-        imuState<_S> propogateImuStateRK(const imuState<_S> &imu_state_k, const
-            imuReading<_S> &measurement_k) {
+        imuState<_S> propogateImuStateRK(const imuState<_S> &imu_state_k,
+            const imuReading<_S> &measurement_k) {
           imuState<_S> imuStateProp = imu_state_k;
-          _S dT = measurement_k.dT;
+          const _S dT(measurement_k.dT);
 
           Vector3<_S> omega_vec = measurement_k.omega - imu_state_k.b_g;
           Matrix4<_S> omega_psi = 0.5 * omegaMat(omega_vec);
@@ -1439,26 +1439,26 @@ namespace msckf_mono {
           y0(3) = imu_state_k.q_IG.w();
 
           k0 = omega_psi * (y0);
-          k1 = omega_psi * (y0 + (k0 / 4) * dT);
-          k2 = omega_psi * (y0 + (k0 / 8 + k1 / 8) * dT);
-          k3 = omega_psi * (y0 + (-k1 / 2 + k2) * dT);
-          k4 = omega_psi * (y0 + (k0 * 3 / 16 + k3 * 9 / 16) * dT);
+          k1 = omega_psi * (y0 + (k0 / 4.) * dT);
+          k2 = omega_psi * (y0 + (k0 / 8. + k1 / 8.) * dT);
+          k3 = omega_psi * (y0 + (-k1 / 2. + k2) * dT);
+          k4 = omega_psi * (y0 + (k0 * 3. / 16. + k3 * 9. / 16.) * dT);
           k5 = omega_psi *
             (y0 +
-             (-k0 * 3 / 7 + k1 * 2 / 7 + k2 * 12 / 7 - k3 * 12 / 7 + k4 * 8 / 7) *
+             (-k0 * 3. / 7. + k1 * 2. / 7. + k2 * 12. / 7. - k3 * 12. / 7. + k4 * 8. / 7.) *
              dT);
 
-          y_t = y0 + (7 * k0 + 32 * k2 + 12 * k3 + 32 * k4 + 7 * k5) * dT / 90;
+          y_t = y0 + (7. * k0 + 32. * k2 + 12. * k3 + 32. * k4 + 7. * k5) * dT / 90.;
 
           Quaternion<_S> q(y_t(3), -y_t(0), -y_t(1), -y_t(2));
           q.normalize();
 
           imuStateProp.q_IG = q;
-          imuStateProp.v_I_G = (((imu_state_k.q_IG.toRotationMatrix()).transpose()) *
+          Vector3<_S> delta_v_I_G = (((imu_state_k.q_IG.toRotationMatrix()).transpose()) *
               (measurement_k.a - imu_state_k.b_a) +
-              imu_state_k.g) *
-            dT +
-            imu_state_k.v_I_G;
+              imu_state_k.g) * dT;
+
+          imuStateProp.v_I_G += delta_v_I_G;
 
           imuStateProp.p_I_G = imu_state_k.p_I_G + imu_state_k.v_I_G * dT;
           return imuStateProp;

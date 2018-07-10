@@ -12,7 +12,7 @@ SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -std=c++14 -DEIGEN_NO_DEBUG")
 IF(DEFINED ENV{ARM_ARCHITECTURE})
   SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -mfpu=neon -march=armv7-a")
 ELSE()
-  SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -msse4.2 -msse -msse2")
+  SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS}")
 ENDIF()
 SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS} -std=c++14 -g")
 
@@ -96,6 +96,9 @@ target_link_libraries(msckf_mono
 
 add_executable(asl_msckf datasets/asl_msckf.cpp datasets/asl_readers.cpp)
 target_link_libraries(asl_msckf msckf_mono ${LINK_LIBS})
+
+add_executable(asl_msckf_no_ground_truth datasets/asl_msckf_no_ground_truth.cpp datasets/asl_readers.cpp)
+target_link_libraries(asl_msckf_no_ground_truth msckf_mono ${LINK_LIBS})
 
 add_executable(msckf_mono_node nodes/msckf_mono_node.cpp)
 target_link_libraries(msckf_mono_node msckf_mono ${LINK_LIBS})

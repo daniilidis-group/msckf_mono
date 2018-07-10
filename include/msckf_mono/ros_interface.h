@@ -5,6 +5,7 @@
 
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/Image.h>
+#include <nav_msgs/Odometry.h>
 #include <image_transport/image_transport.h>
 #include <cv_bridge/cv_bridge.h>
 
@@ -23,7 +24,7 @@ namespace msckf_mono
 
       void imageCallback(const sensor_msgs::ImageConstPtr& msg);
 
-      void publish_core();
+      void publish_core(const ros::Time& publish_time);
 
       void publish_extra(const ros::Time& publish_time);
 
@@ -34,6 +35,7 @@ namespace msckf_mono
       std::string subscribe_topic_;
       image_transport::Subscriber image_sub_;
       image_transport::Publisher track_image_pub_;
+      ros::Publisher odom_pub_;
 
       ros::Subscriber imu_sub_;
 
@@ -41,26 +43,15 @@ namespace msckf_mono
 
       bool debug_;
 
-      std::atomic<bool> is_calibrating_imu_;
-      bool is_first_imu_;
       std::vector<std::tuple<double, imuReading<float>>> imu_queue_;
       double prev_imu_time_;
-
-      void setup_msckf();
-      std::shared_ptr<MSCKF<float>> msckf_;
-      msckf_mono::Camera<float> camera_;
-      msckf_mono::noiseParams<float> noise_params_;
-      Eigen::Matrix<float,12,1> Q_imu_vars_;
-      Eigen::Matrix<float,15,1> IMUCovar_vars_;
-      msckf_mono::MSCKFParams<float> msckf_params_;
-      msckf_mono::imuState<float> init_imu_state_;
 
       void setup_track_handler();
       std::shared_ptr<corner_detector::TrackHandler> track_handler_;
 
-      msckf_mono::Matrix4<float> T_cam_imu_;
-      msckf_mono::Matrix3<float> R_cam_imu_;
-      msckf_mono::Vector3<float> p_cam_imu_;
+      Matrix4<float> T_imu_cam_;
+      Matrix3<float> R_imu_cam_;
+      Vector3<float> p_imu_cam_;
 
       std::string camera_model_;
       cv::Mat K_;
@@ -70,6 +61,23 @@ namespace msckf_mono
       int n_grid_cols_;
       int n_grid_rows_;
       float ransac_threshold_;
+
+      enum CalibrationMethod { TimedStandStill };
+      CalibrationMethod imu_calibration_method_;
+
+      std::atomic<bool> imu_calibrated_;
+      bool can_initialize_imu();
+      void initialize_imu();
+
+      int state_k_;
+      void setup_msckf();
+      std::shared_ptr<MSCKF<float>> msckf_;
+      Camera<float> camera_;
+      noiseParams<float> noise_params_;
+      Eigen::Matrix<float,12,1> Q_imu_vars_;
+      Eigen::Matrix<float,15,1> IMUCovar_vars_;
+      MSCKFParams<float> msckf_params_;
+      imuState<float> init_imu_state_;
   };
 }
 
