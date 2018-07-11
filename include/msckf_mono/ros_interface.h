@@ -18,6 +18,8 @@ namespace msckf_mono
 {
   class RosInterface {
     public:
+      EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
       RosInterface(ros::NodeHandle nh);
 
       void imuCallback(const sensor_msgs::ImuConstPtr& imu);
@@ -49,9 +51,11 @@ namespace msckf_mono
       void setup_track_handler();
       std::shared_ptr<corner_detector::TrackHandler> track_handler_;
 
-      Matrix4<float> T_imu_cam_;
       Matrix3<float> R_imu_cam_;
       Vector3<float> p_imu_cam_;
+
+      Matrix3<float> R_cam_imu_;
+      Vector3<float> p_cam_imu_;
 
       std::string camera_model_;
       cv::Mat K_;
@@ -71,7 +75,7 @@ namespace msckf_mono
 
       int state_k_;
       void setup_msckf();
-      std::shared_ptr<MSCKF<float>> msckf_;
+      MSCKF<float> msckf_;
       Camera<float> camera_;
       noiseParams<float> noise_params_;
       Eigen::Matrix<float,12,1> Q_imu_vars_;

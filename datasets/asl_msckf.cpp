@@ -64,7 +64,11 @@ int main(int argc, char** argv)
   camera.c_v = K.at<float>(1,2);
 
   camera.q_CI = cam0->get_q_BS();
+  const auto q_CI = camera.q_CI;
   camera.p_C_I = cam0->get_p_BS();
+
+  ROS_INFO_STREAM("Camera\n- q_CI " << q_CI.x() << "," << q_CI.y() << "," << q_CI.z() << "," << q_CI.w() << "\n" <<
+                  "- p_C_I " << camera.p_C_I.transpose());
 
   float feature_cov;
   nh.param<float>("feature_covariance", feature_cov, 7);

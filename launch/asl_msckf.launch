@@ -42,8 +42,8 @@
     <group unless="$(arg profile)">
       <node pkg="msckf_mono" name="asl_msckf" type="asl_msckf_no_ground_truth" unless="$(arg gdb_debug)" output="screen"/>
       <node pkg="msckf_mono" name="asl_msckf" type="asl_msckf_no_ground_truth" launch-prefix="xterm -e gdb --args" if="$(arg gdb_debug)"/>
-    </group>
-    <group if="$(arg profile)">
+    </group>                                                            
+    <group if="$(arg profile)">                                         
       <node pkg="msckf_mono" name="asl_msckf" type="asl_msckf_no_ground_truth" launch-prefix="perf record -g --call-graph dwarf --output=perf.out.node_name.data --" if="$(arg profile)"/>
     </group>
 

@@ -178,14 +178,14 @@ int main(int argc, char** argv)
   auto q = imu_state.q_IG;
 
   ROS_INFO_STREAM("\nInitial IMU State" <<
-    "\n---p_I_G " << imu_state.p_I_G.transpose() <<
-    "\n---q_IG " << q.w() << "," << q.x() << "," << q.y() << "," << q.x() <<
-    "\n---v_I_G " << imu_state.v_I_G.transpose() <<
-    "\n---b_a " << imu_state.b_a.transpose() <<
-    "\n---b_g " << imu_state.b_g.transpose() <<
-    "\n---a " << imu_data.a.transpose()<<
-    "\n---g " << imu_state.g.transpose()<<
-    "\n---world_adjusted_a " << (q.toRotationMatrix().transpose()*(imu_data.a-imu_state.b_a)).transpose());
+    "\n--p_I_G " << imu_state.p_I_G.transpose() <<
+    "\n--q_IG " << q.w() << "," << q.x() << "," << q.y() << "," << q.x() <<
+    "\n--v_I_G " << imu_state.v_I_G.transpose() <<
+    "\n--b_a " << imu_state.b_a.transpose() <<
+    "\n--b_g " << imu_state.b_g.transpose() <<
+    "\n--a " << imu_data.a.transpose()<<
+    "\n--g " << imu_state.g.transpose()<<
+    "\n--world_adjusted_a " << (q.toRotationMatrix().transpose()*(imu_data.a-imu_state.b_a)).transpose());
 
   ros::Publisher odom_pub = nh.advertise<nav_msgs::Odometry>("odom", 100);
   ros::Publisher map_pub = nh.advertise<sensor_msgs::PointCloud2>("map", 100);

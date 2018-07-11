@@ -155,6 +155,7 @@ class TrackHandler
 
     Eigen::Vector3f gyro_accum_;
     size_t n_gyro_readings_;
+    bool use_gyro_;
 
     const std::string distortion_model_;
     const cv::Mat distortion_coeffs_;

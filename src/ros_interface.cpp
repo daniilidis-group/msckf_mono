@@ -11,13 +11,13 @@ namespace msckf_mono
     load_parameters();
     setup_track_handler();
 
-    image_sub_ = it_.subscribe("/rig/left/image_mono", 1,
+    image_sub_ = it_.subscribe("/cam0/image_raw", 1,
                                &RosInterface::imageCallback, this);
 
-    track_image_pub_ = it_.advertise("/rig/left/image_mono/tracks", 1);
+    track_image_pub_ = it_.advertise("/cam0/image_raw/tracks", 1);
 
-    imu_sub_ = nh_.subscribe("/rig/imu", 10, &RosInterface::imuCallback, this);
-    odom_pub_ = nh.advertise<nav_msgs::Odometry>("/rig/msckf_mono/odom", 100);
+    imu_sub_ = nh_.subscribe("/imu0", 10, &RosInterface::imuCallback, this);
+    odom_pub_ = nh.advertise<nav_msgs::Odometry>("/msckf_mono/odom", 100);
   }
 
   void RosInterface::imuCallback(const sensor_msgs::ImuConstPtr& imu)
@@ -88,10 +88,10 @@ namespace msckf_mono
         [](auto& x){return std::get<1>(x);});
 
     for(auto& reading : imu_since_prev_img){
-      msckf_->propagate(reading);
+      msckf_.propagate(reading);
 
-      Vector3<float> gyro_measurement = R_imu_cam_ * reading.omega;
-      // track_handler_->add_gyro_reading(gyro_measurement);
+      Vector3<float> gyro_measurement = R_imu_cam_ * (reading.omega - init_imu_state_.b_g);
+      track_handler_->add_gyro_reading(gyro_measurement);
     }
 
     imu_queue_.erase(imu_queue_.begin(), frame_end);
@@ -108,12 +108,12 @@ namespace msckf_mono
     corner_detector::IdVector new_ids;
     track_handler_->new_features(new_features, new_ids);
 
-    msckf_->augmentState(state_k_, (float)cur_image_time);
-    msckf_->update(cur_features, cur_ids);
-    msckf_->addFeatures(new_features, new_ids);
-    msckf_->marginalize();
-    msckf_->pruneRedundantStates();
-    msckf_->pruneEmptyStates();
+    msckf_.augmentState(state_k_, (float)cur_image_time);
+    msckf_.update(cur_features, cur_ids);
+    msckf_.addFeatures(new_features, new_ids);
+    msckf_.marginalize();
+    msckf_.pruneRedundantStates();
+    msckf_.pruneEmptyStates();
 
     publish_core(msg->header.stamp);
     publish_extra(msg->header.stamp);
@@ -121,7 +121,7 @@ namespace msckf_mono
 
   void RosInterface::publish_core(const ros::Time& publish_time)
   {
-    auto imu_state = msckf_->getImuState();
+    auto imu_state = msckf_.getImuState();
 
     nav_msgs::Odometry odom;
     odom.header.stamp = publish_time;
@@ -157,7 +157,7 @@ namespace msckf_mono
   bool RosInterface::can_initialize_imu()
   {
     if(imu_calibration_method_ == TimedStandStill){
-      return imu_queue_.size() > 2600;
+      return imu_queue_.size() > 1600;
     }
 
     return false;
@@ -193,12 +193,16 @@ namespace msckf_mono
 
     init_imu_state_.p_I_G.setZero();
     init_imu_state_.v_I_G.setZero();
+    const auto q = init_imu_state_.q_IG;
 
-    ROS_INFO_STREAM("IMU Biases Calibrated");
-    ROS_INFO_STREAM("b_g - " << init_imu_state_.b_g.transpose());
-    ROS_INFO_STREAM("b_a - " << init_imu_state_.b_a.transpose());
-    const auto q_IG = init_imu_state_.q_IG;
-    ROS_INFO_STREAM("q_IG - " << q_IG.x() << "," << q_IG.y() << "," << q_IG.z() << "," << q_IG.w());
+    ROS_INFO_STREAM("\nInitial IMU State" <<
+      "\n--p_I_G " << init_imu_state_.p_I_G.transpose() <<
+      "\n--q_IG " << q.w() << "," << q.x() << "," << q.y() << "," << q.x() <<
+      "\n--v_I_G " << init_imu_state_.v_I_G.transpose() <<
+      "\n--b_a " << init_imu_state_.b_a.transpose() <<
+      "\n--b_g " << init_imu_state_.b_g.transpose() <<
+      "\n--g " << init_imu_state_.g.transpose());
+
   }
 
   void RosInterface::setup_track_handler()
@@ -210,9 +214,8 @@ namespace msckf_mono
 
   void RosInterface::setup_msckf()
   {
-    msckf_.reset(new MSCKF<float>() );
     state_k_ = 0;
-    msckf_->initialize(camera_, noise_params_, msckf_params_, init_imu_state_);
+    msckf_.initialize(camera_, noise_params_, msckf_params_, init_imu_state_);
   }
 
   void RosInterface::load_parameters()
@@ -247,18 +250,22 @@ namespace msckf_mono
     XmlRpc::XmlRpcValue ros_param_list;
     nh_.getParam(kalibr_camera+"/T_cam_imu", ros_param_list);
     ROS_ASSERT(ros_param_list.getType() == XmlRpc::XmlRpcValue::TypeArray);
-
+    
+    Matrix4<float> T_imu_cam;
     for (int32_t i = 0; i < ros_param_list.size(); ++i) 
     {
       ROS_ASSERT(ros_param_list[i].getType() == XmlRpc::XmlRpcValue::TypeArray);
       for(int32_t j=0; j<ros_param_list[i].size(); ++j){
         ROS_ASSERT(ros_param_list[i][j].getType() == XmlRpc::XmlRpcValue::TypeDouble);
-        T_imu_cam_(i,j) = static_cast<double>(ros_param_list[i][j]);
+        T_imu_cam(i,j) = static_cast<double>(ros_param_list[i][j]);
       }
     }
 
-    R_imu_cam_ = T_imu_cam_.block<3,3>(0,0);
-    p_imu_cam_ = T_imu_cam_.block<3,1>(0,3);
+    R_imu_cam_ =  T_imu_cam.block<3,3>(0,0);
+    p_imu_cam_ =  T_imu_cam.block<3,1>(0,3);
+
+    R_cam_imu_ = R_imu_cam_.transpose();
+    p_cam_imu_ = R_cam_imu_ * (-1. * p_imu_cam_);
 
     nh_.param<int>("n_grid_rows", n_grid_rows_, 8);
     nh_.param<int>("n_grid_cols", n_grid_cols_, 8);
@@ -272,8 +279,8 @@ namespace msckf_mono
     camera_.f_u = intrinsics[2];
     camera_.f_v = intrinsics[3];
 
-    camera_.q_CI = Quaternion<float>(R_imu_cam_);
-    camera_.p_C_I = p_imu_cam_;
+    camera_.q_CI = Quaternion<float>(R_cam_imu_).inverse(); // compensates for expected form
+    camera_.p_C_I = p_cam_imu_;
 
     float feature_cov;
     nh_.param<float>("feature_covariance", feature_cov, 7);
@@ -328,7 +335,15 @@ namespace msckf_mono
                                    << distortion_coeffs[2] << ", "
                                    << distortion_coeffs[3] );
     ROS_INFO_STREAM("-Camera topic " << subscribe_topic_);
-    ROS_INFO_STREAM("-T_cam_imu \n" << T_imu_cam_);
+    ROS_INFO_STREAM("-T_imu_cam \n" << T_imu_cam);
+    ROS_INFO_STREAM("-R_imu_cam \n" << R_imu_cam_);
+    ROS_INFO_STREAM("-p_imu_cam \n" << p_imu_cam_.transpose());
+    ROS_INFO_STREAM("-R_cam_imu \n" << R_cam_imu_);
+    ROS_INFO_STREAM("-p_cam_imu \n" << p_cam_imu_.transpose());
+
+    const auto q_CI = camera_.q_CI;
+    ROS_INFO_STREAM("-q_CI \n" << q_CI.x() << "," << q_CI.y() << "," << q_CI.z() << "," << q_CI.w());
+    ROS_INFO_STREAM("-p_C_I \n" << camera_.p_C_I.transpose());
   }
 
 }
