@@ -11,12 +11,12 @@ namespace msckf_mono
     load_parameters();
     setup_track_handler();
 
-    image_sub_ = it_.subscribe("/cam0/image_raw", 1,
+    image_sub_ = it_.subscribe("/cam0/image_raw", 20,
                                &RosInterface::imageCallback, this);
 
     track_image_pub_ = it_.advertise("/cam0/image_raw/tracks", 1);
 
-    imu_sub_ = nh_.subscribe("/imu0", 10, &RosInterface::imuCallback, this);
+    imu_sub_ = nh_.subscribe("/imu0", 200, &RosInterface::imuCallback, this);
     odom_pub_ = nh.advertise<nav_msgs::Odometry>("/msckf_mono/odom", 100);
   }
 
@@ -87,14 +87,14 @@ namespace msckf_mono
         std::back_inserter(imu_since_prev_img),
         [](auto& x){return std::get<1>(x);});
 
+    imu_queue_.erase(imu_queue_.begin(), frame_end);
+
     for(auto& reading : imu_since_prev_img){
       msckf_.propagate(reading);
 
       Vector3<float> gyro_measurement = R_imu_cam_ * (reading.omega - init_imu_state_.b_g);
       track_handler_->add_gyro_reading(gyro_measurement);
     }
-
-    imu_queue_.erase(imu_queue_.begin(), frame_end);
 
     track_handler_->set_current_image( cv_ptr->image, cur_image_time );
 
@@ -112,7 +112,7 @@ namespace msckf_mono
     msckf_.update(cur_features, cur_ids);
     msckf_.addFeatures(new_features, new_ids);
     msckf_.marginalize();
-    msckf_.pruneRedundantStates();
+    // msckf_.pruneRedundantStates();
     msckf_.pruneEmptyStates();
 
     publish_core(msg->header.stamp);
