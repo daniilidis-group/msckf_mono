@@ -11,13 +11,12 @@ namespace msckf_mono
     load_parameters();
     setup_track_handler();
 
-    image_sub_ = it_.subscribe("/cam0/image_raw", 20,
+    odom_pub_ = nh.advertise<nav_msgs::Odometry>("odom", 100);
+    track_image_pub_ = it_.advertise("track_overlay_image", 1);
+
+    imu_sub_ = nh_.subscribe("imu", 200, &RosInterface::imuCallback, this);
+    image_sub_ = it_.subscribe("image_mono", 20,
                                &RosInterface::imageCallback, this);
-
-    track_image_pub_ = it_.advertise("/cam0/image_raw/tracks", 1);
-
-    imu_sub_ = nh_.subscribe("/imu0", 200, &RosInterface::imuCallback, this);
-    odom_pub_ = nh.advertise<nav_msgs::Odometry>("/msckf_mono/odom", 100);
   }
 
   void RosInterface::imuCallback(const sensor_msgs::ImuConstPtr& imu)
