@@ -146,6 +146,8 @@ namespace msckf_mono {
 
         // Generates a new camera state and adds it to the full state and covariance.
         void augmentState(const int& state_id, const _S& time) {
+          map_.clear();
+
           // Compute camera_ pose from current IMU pose
           Quaternion<_S> q_CG = camera_.q_CI * imu_state_.q_IG;
 

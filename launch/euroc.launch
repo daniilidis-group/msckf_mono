@@ -2,10 +2,11 @@
 <launch>
   <param name="/use_sim_time" value="true"/>
 
-  <!-- Path to the MH_03 bag -->
-  <arg name="mh_03_bag"/>
+  <!-- Path to MH_03 bag -->
+  <arg name="mh_03_bag" default="$(find msckf_mono)/euroc/MH_03_medium.bag"/>
 
-  <arg name="kalibr_yaml" default="$(find msckf_mono)/launch/MH_03_kalibr.yaml"/>
+  <!-- Path to MH_03 kalibr calibration -->
+  <arg name="kalibr_yaml" default="$(find msckf_mono)/euroc/MH_03_kalibr.yaml"/>
 
   <group ns="msckf">
     <rosparam command="load" file="$(arg kalibr_yaml)"/>
@@ -46,5 +47,7 @@
   </group>
 
   <node pkg="rosbag" type="play" name="playback" args="--clock -s 10.0 $(arg mh_03_bag)" output="screen"/>
+
+  <node pkg="rviz" name="msckf_rviz" type="rviz" args="-d $(find msckf_mono)/euroc/rviz.rviz"/>
 
 </launch>

@@ -34,7 +34,6 @@ namespace msckf_mono
       ros::NodeHandle nh_;
       image_transport::ImageTransport it_;
 
-      std::string subscribe_topic_;
       image_transport::Subscriber image_sub_;
       image_transport::Publisher track_image_pub_;
       ros::Publisher odom_pub_;
@@ -68,6 +67,9 @@ namespace msckf_mono
 
       enum CalibrationMethod { TimedStandStill };
       CalibrationMethod imu_calibration_method_;
+
+      double stand_still_time_;
+      double done_stand_still_time_;
 
       std::atomic<bool> imu_calibrated_;
       bool can_initialize_imu();

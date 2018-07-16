@@ -24,6 +24,7 @@ namespace msckf_mono
     double cur_imu_time = imu->header.stamp.toSec();
     if(prev_imu_time_ == 0.0){
       prev_imu_time_ = cur_imu_time;
+      done_stand_still_time_ = cur_imu_time + stand_still_time_;
       return;
     }
 
@@ -156,7 +157,7 @@ namespace msckf_mono
   bool RosInterface::can_initialize_imu()
   {
     if(imu_calibration_method_ == TimedStandStill){
-      return imu_queue_.size() > 1600;
+      return prev_imu_time_ > done_stand_still_time_;
     }
 
     return false;
@@ -219,8 +220,6 @@ namespace msckf_mono
 
   void RosInterface::load_parameters()
   {
-    imu_calibration_method_ = TimedStandStill;
-
     std::string kalibr_camera;
     nh_.getParam("kalibr_camera_name", kalibr_camera);
 
@@ -244,8 +243,6 @@ namespace msckf_mono
     dist_coeffs_.at<float>(2) = distortion_coeffs[2];
     dist_coeffs_.at<float>(3) = distortion_coeffs[3];
 
-    nh_.getParam(kalibr_camera+"/rostopic", subscribe_topic_);
-
     XmlRpc::XmlRpcValue ros_param_list;
     nh_.getParam(kalibr_camera+"/T_cam_imu", ros_param_list);
     ROS_ASSERT(ros_param_list.getType() == XmlRpc::XmlRpcValue::TypeArray);
@@ -266,12 +263,6 @@ namespace msckf_mono
     R_cam_imu_ = R_imu_cam_.transpose();
     p_cam_imu_ = R_cam_imu_ * (-1. * p_imu_cam_);
 
-    nh_.param<int>("n_grid_rows", n_grid_rows_, 8);
-    nh_.param<int>("n_grid_cols", n_grid_cols_, 8);
-
-    float ransac_threshold_;
-    nh_.param<float>("ransac_threshold_", ransac_threshold_, 0.000002);
-
     // setup camera parameters
     camera_.c_u = intrinsics[0];
     camera_.c_v = intrinsics[1];
@@ -281,6 +272,14 @@ namespace msckf_mono
     camera_.q_CI = Quaternion<float>(R_cam_imu_).inverse(); // compensates for expected form
     camera_.p_C_I = p_cam_imu_;
 
+    // Feature tracking parameteres
+    nh_.param<int>("n_grid_rows", n_grid_rows_, 8);
+    nh_.param<int>("n_grid_cols", n_grid_cols_, 8);
+
+    float ransac_threshold_;
+    nh_.param<float>("ransac_threshold_", ransac_threshold_, 0.000002);
+
+    // MSCKF Parameters
     float feature_cov;
     nh_.param<float>("feature_covariance", feature_cov, 7);
 
@@ -324,6 +323,14 @@ namespace msckf_mono
     nh_.param<int>("min_track_length", msckf_params_.min_track_length, 3);
     nh_.param<int>("max_cam_states", msckf_params_.max_cam_states, 20);
 
+    // Load calibration time
+    int method;
+    nh_.param<int>("imu_initialization_method", method, 0);
+    if(method == 0){
+      imu_calibration_method_ = TimedStandStill;
+    }
+    nh_.param<double>("stand_still_time", stand_still_time_, 8.0);
+
     ROS_INFO_STREAM("Loaded " << kalibr_camera);
     ROS_INFO_STREAM("-Intrinsics " << intrinsics[0] << ", "
                                    << intrinsics[1] << ", "
@@ -333,13 +340,6 @@ namespace msckf_mono
                                    << distortion_coeffs[1] << ", "
                                    << distortion_coeffs[2] << ", "
                                    << distortion_coeffs[3] );
-    ROS_INFO_STREAM("-Camera topic " << subscribe_topic_);
-    ROS_INFO_STREAM("-T_imu_cam \n" << T_imu_cam);
-    ROS_INFO_STREAM("-R_imu_cam \n" << R_imu_cam_);
-    ROS_INFO_STREAM("-p_imu_cam \n" << p_imu_cam_.transpose());
-    ROS_INFO_STREAM("-R_cam_imu \n" << R_cam_imu_);
-    ROS_INFO_STREAM("-p_cam_imu \n" << p_cam_imu_.transpose());
-
     const auto q_CI = camera_.q_CI;
     ROS_INFO_STREAM("-q_CI \n" << q_CI.x() << "," << q_CI.y() << "," << q_CI.z() << "," << q_CI.w());
     ROS_INFO_STREAM("-p_C_I \n" << camera_.p_C_I.transpose());
