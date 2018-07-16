@@ -5,10 +5,24 @@ Monocular MSCKF with ROS Support
 - ROS Kinetic with Boost, OpenCV and Eigen
 - https://github.com/uzh-rpg/fast build and install according to their instructions
 
-# Euroc Dataset
-Build this project inside of a ROS workspace
+# Euroc Dataset -- ROS Bag
+Download MH_03_medium.bag from into the euroc folder in this repository.
 
-Download one (or more) of the datasets from https://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets
+```
+wget http://robotics.ethz.ch/~asl-datasets/ijrr_euroc_mav_dataset/machine_hall/MH_03_medium/MH_03_medium.bag
+mv MH_03_medium.bag <path_to_msckf_mono>/euroc/.
+```
+
+Now run the MSCKF on this sequence
+```
+roslaunch msckf_mono euroc.launch
+```
+
+RViz will come up by default showing the odometry and image with tracks.
+
+
+# Euroc Dataset -- ASL Format
+Download one (or more) of the datasets from https://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets in the ASL dataset format
 Place
 ```
 %YAML:1.0
@@ -24,7 +38,7 @@ roslaunch msckf_mono asl_mskcf.launch data_set_path:=<directory of mav0 inside o
 
 RViz will come up by default and display the image with tracks on the left and the generated path and map on the right.
 
-![Machine Hall 03 Medium](https://github.com/daniilidis-group/msckf_mono/raw/master/EurocMH03.png)
+![Machine Hall 03 Medium](https://github.com/daniilidis-group/msckf_mono/raw/master/euroc/MH03.png)
 
 The two paths shown, green is ground truth and red is from the MSCKF.
 
@@ -39,6 +53,6 @@ We have run this on platforms ranging from the odroid to a modern laptop, so hop
 - The core MSCKF was used in http://openaccess.thecvf.com/content_cvpr_2017/papers/Zhu_Event-Based_Visual_Inertial_CVPR_2017_paper.pdf
 
 # TODO
-- ROS Node and Nodelet
+- ROS Nodelet
 - Remove OpenCV from opening YAML files
 - PennCOSYVIO Dataset support

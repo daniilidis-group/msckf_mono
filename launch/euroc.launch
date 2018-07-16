@@ -1,16 +1,18 @@
 <?xml version="1.0"?>
 <launch>
-  <arg name="gdb_debug" default="false"/>
-  <arg name="profile" default="false"/>
+  <param name="/use_sim_time" value="true"/>
 
-  <arg name="kalibr_yaml"/>
-  <arg name="kalibr_camera" default="cam0"/>
+  <!-- Path to MH_03 bag -->
+  <arg name="mh_03_bag" default="$(find msckf_mono)/euroc/MH_03_medium.bag"/>
+
+  <!-- Path to MH_03 kalibr calibration -->
+  <arg name="kalibr_yaml" default="$(find msckf_mono)/euroc/MH_03_kalibr.yaml"/>
 
   <group ns="msckf">
-    <param name="kalibr_camera_name" value="$(arg kalibr_camera)"/>
     <rosparam command="load" file="$(arg kalibr_yaml)"/>
+    <param name="kalibr_camera_name" value="cam0"/>
 
-    <param name="feature_cov" value="8"/>
+    <param name="feature_cov" value="2"/>
 
     <param name="imu_vars/w_var" value="1e-4"/>
     <param name="imu_vars/dbg_var" value="3.6733e-5"/>
@@ -38,13 +40,14 @@
     <param name="n_grid_rows" value="10"/>
     <param name="n_grid_cols" value="10"/>
 
-    <group unless="$(arg profile)">
-      <node pkg="msckf_mono" name="msckf_mono_node" type="msckf_mono_node" unless="$(arg gdb_debug)" output="screen"/>
-      <node pkg="msckf_mono" name="msckf_mono_node" type="msckf_mono_node" launch-prefix="xterm -e gdb --args" if="$(arg gdb_debug)"/>
-    </group>
-    <group if="$(arg profile)">
-      <node pkg="msckf_mono" name="msckf_mono_node" type="msckf_mono_node" launch-prefix="perf record -g --call-graph dwarf --output=perf.out.node_name.data --" if="$(arg profile)"/>
-    </group>
-
+    <node pkg="msckf_mono" name="msckf_mono_node" type="msckf_mono_node">
+      <remap from="imu" to="/imu0"/>
+      <remap from="image_mono" to="/cam0/image_raw"/>
+    </node>
   </group>
+
+  <node pkg="rosbag" type="play" name="playback" args="--clock -s 10.0 $(arg mh_03_bag)" output="screen"/>
+
+  <node pkg="rviz" name="msckf_rviz" type="rviz" args="-d $(find msckf_mono)/euroc/rviz.rviz"/>
+
 </launch>

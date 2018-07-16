@@ -198,7 +198,7 @@ TrackHandler::TrackHandler(const cv::Mat K,
   : ransac_threshold_(0.0000002), next_feature_id_(0),
     gyro_accum_(Eigen::Vector3f::Zero()), n_gyro_readings_(0),
     K_(K), K_inv_(K.inv()), distortion_coeffs_(distortion_coeffs),
-    distortion_model_(dist_model)
+    distortion_model_(dist_model), use_gyro_(true)
 {
   dR_ = cv::Mat::eye(3,3,CV_32F);
   clear_tracks();
@@ -206,25 +206,25 @@ TrackHandler::TrackHandler(const cv::Mat K,
   tracker_.configure(51, 0.00001, 4, 30, 1.);
 }
 
-TrackHandler::~TrackHandler()
-{}
+TrackHandler::~TrackHandler() {}
 
 void TrackHandler::set_grid_size(int n_rows, int n_cols) {
   detector_.set_grid_size(n_rows, n_cols);
 }
 
-void TrackHandler::add_gyro_reading(Eigen::Vector3f& gyro_reading){
+void TrackHandler::add_gyro_reading(Eigen::Vector3f& gyro_reading) {
   gyro_accum_ += gyro_reading;
   n_gyro_readings_++;
 }
 
-void TrackHandler::integrate_gyro(){
+void TrackHandler::integrate_gyro() {
   double dt = cur_time_-prev_time_;
 
   if(n_gyro_readings_>0){
     gyro_accum_ /= static_cast<float>(n_gyro_readings_);
   }else{
-    gyro_accum_.setZero();
+    use_gyro_ = false;
+    return;
   }
   gyro_accum_ *= dt;
 
@@ -235,7 +235,7 @@ void TrackHandler::integrate_gyro(){
   cv::Mat dR = cv::Mat::eye(3,3,CV_32F);
   cv::Rodrigues(r, dR);
 
-  gyro_accum_ = Eigen::Vector3f::Zero();
+  gyro_accum_.setZero();
   n_gyro_readings_ = 0;
 
   dR_ = dR;
@@ -248,25 +248,30 @@ void TrackHandler::predict_features(){
       prev_feature_ids_.end(),
       std::back_inserter(cur_feature_ids_));
 
-  integrate_gyro();
+  if (use_gyro_){
+    integrate_gyro();
 
-  // homography by rotation
-  cv::Mat H = K_ * dR_ * K_inv_;
-  cv::Mat pt_buf1(3,1,CV_32F);
-  pt_buf1.at<float>(2) = 1.0;
+    // homography by rotation
+    cv::Mat H = K_ * dR_ * K_inv_;
+    cv::Mat pt_buf1(3,1,CV_32F);
+    pt_buf1.at<float>(2) = 1.0;
 
-  cv::Mat pt_buf2(3,1,CV_32F);
+    cv::Mat pt_buf2(3,1,CV_32F);
 
-  for(auto& pt : prev_features_){
-    pt_buf1.at<float>(0) = pt.x;
-    pt_buf1.at<float>(1) = pt.y;
+    for(auto& pt : prev_features_){
+      pt_buf1.at<float>(0) = pt.x;
+      pt_buf1.at<float>(1) = pt.y;
 
-    pt_buf2 = H * pt_buf1;
+      pt_buf2 = H * pt_buf1;
 
-    Point2f new_point;
-    new_point.x = pt_buf2.at<float>(0) / pt_buf2.at<float>(2);
-    new_point.y = pt_buf2.at<float>(1) / pt_buf2.at<float>(2);
-    cur_features_.push_back(new_point);
+      const float x = pt_buf2.at<float>(0) / pt_buf2.at<float>(2);
+      const float y = pt_buf2.at<float>(1) / pt_buf2.at<float>(2);
+      cur_features_.emplace_back(x,y);
+    }
+  }else{
+    std::copy(prev_features_.begin(),
+              prev_features_.end(),
+              std::back_inserter(cur_features_));
   }
 }
 
@@ -338,7 +343,6 @@ void TrackHandler::tracked_features(OutFeatureVector& features, IdVector& featur
   feature_ids.clear();
   if(cur_features_.size()>0){
     Point2fVector undistorted_prev_pts;
-
     undistortPoints(prev_features_, undistorted_prev_pts);
 
     Point2fVector undistorted_cur_pts;
@@ -359,7 +363,7 @@ void TrackHandler::tracked_features(OutFeatureVector& features, IdVector& featur
       for(int j=0; j<3; j++)
         dR(i,j) = dR_.at<float>(i,j);
 
-    if(cur_features.size() > 5){
+    if(cur_features.size() > 5 && false){
       auto valid_pts = twoPointRansac(dR, prev_features, cur_features);
 
       auto ocf_it = cur_features.begin();
@@ -395,8 +399,8 @@ void TrackHandler::new_features(OutFeatureVector& features, IdVector& feature_id
     detector_.set_grid_position(f);
   }
   detector_.detect_features(cur_img_, new_features_);
-  std::cout << "[Detector] Found " << new_features_.size()
-            << " new features" << std::endl;
+  //std::cout << "[Detector] Found " << new_features_.size()
+  //          << " new features" << std::endl;
 
   // generate ids for the new features
   new_feature_ids_.reserve(feature_ids.size()+new_features_.size());
