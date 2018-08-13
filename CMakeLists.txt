@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(msckf_mono)
 
+set( CMAKE_EXPORT_COMPILE_COMMANDS ON )
+
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -msse4.2 -msse -msse2 -mavx -funroll-loops")
 SET(CMAKE_BUILD_TYPE "RelWithDebInfo")
 
