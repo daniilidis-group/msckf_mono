@@ -33,7 +33,7 @@ The stand_still_end is going to be the time just before the quad takes off for t
 
 Now you can run the MSCKF on the individual sequence
 ```
-roslaunch msckf_mono asl_mskcf.launch data_set_path:=<directory of mav0 inside of sequence> stand_still_end:=<time to start at with dot at the end>
+roslaunch msckf_mono asl_msckf.launch data_set_path:=<directory of mav0 inside of sequence> stand_still_end:=<time to start at with dot at the end>
 ```
 
 RViz will come up by default and display the image with tracks on the left and the generated path and map on the right.
