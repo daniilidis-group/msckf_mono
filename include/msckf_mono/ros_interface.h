@@ -80,8 +80,6 @@ namespace msckf_mono
       MSCKF<float> msckf_;
       Camera<float> camera_;
       noiseParams<float> noise_params_;
-      Eigen::Matrix<float,12,1> Q_imu_vars_;
-      Eigen::Matrix<float,15,1> IMUCovar_vars_;
       MSCKFParams<float> msckf_params_;
       imuState<float> init_imu_state_;
   };
