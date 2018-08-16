@@ -264,12 +264,12 @@ namespace msckf_mono
     p_cam_imu_ = R_cam_imu_ * (-1. * p_imu_cam_);
 
     // setup camera parameters
-    camera_.c_u = intrinsics[0];
-    camera_.c_v = intrinsics[1];
-    camera_.f_u = intrinsics[2];
-    camera_.f_v = intrinsics[3];
+    camera_.f_u = intrinsics[0];
+    camera_.f_v = intrinsics[1];
+    camera_.c_u = intrinsics[2];
+    camera_.c_v = intrinsics[3];
 
-    camera_.q_CI = Quaternion<float>(R_cam_imu_).inverse(); // compensates for expected form
+    camera_.q_CI = Quaternion<float>(R_cam_imu_); // TODO please check it 
     camera_.p_C_I = p_cam_imu_;
 
     // Feature tracking parameteres
