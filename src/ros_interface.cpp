@@ -247,29 +247,29 @@ namespace msckf_mono
     nh_.getParam(kalibr_camera+"/T_cam_imu", ros_param_list);
     ROS_ASSERT(ros_param_list.getType() == XmlRpc::XmlRpcValue::TypeArray);
     
-    Matrix4<float> T_imu_cam;
+    Matrix4<float> T_cam_imu;
     for (int32_t i = 0; i < ros_param_list.size(); ++i) 
     {
       ROS_ASSERT(ros_param_list[i].getType() == XmlRpc::XmlRpcValue::TypeArray);
       for(int32_t j=0; j<ros_param_list[i].size(); ++j){
         ROS_ASSERT(ros_param_list[i][j].getType() == XmlRpc::XmlRpcValue::TypeDouble);
-        T_imu_cam(i,j) = static_cast<double>(ros_param_list[i][j]);
+        T_cam_imu(i,j) = static_cast<double>(ros_param_list[i][j]);
       }
     }
 
-    R_imu_cam_ =  T_imu_cam.block<3,3>(0,0);
-    p_imu_cam_ =  T_imu_cam.block<3,1>(0,3);
+    R_cam_imu_ =  T_cam_imu.block<3,3>(0,0);
+    p_cam_imu_ =  T_cam_imu.block<3,1>(0,3);
 
-    R_cam_imu_ = R_imu_cam_.transpose();
-    p_cam_imu_ = R_cam_imu_ * (-1. * p_imu_cam_);
+    R_imu_cam_ = R_cam_imu_.transpose();
+    p_imu_cam_ = R_imu_cam_ * (-1. * p_cam_imu_);
 
     // setup camera parameters
-    camera_.c_u = intrinsics[0];
-    camera_.c_v = intrinsics[1];
-    camera_.f_u = intrinsics[2];
-    camera_.f_v = intrinsics[3];
+    camera_.f_u = intrinsics[0];
+    camera_.f_v = intrinsics[1];
+    camera_.c_u = intrinsics[2];
+    camera_.c_v = intrinsics[3];
 
-    camera_.q_CI = Quaternion<float>(R_cam_imu_).inverse(); // compensates for expected form
+    camera_.q_CI = Quaternion<float>(R_cam_imu_).inverse(); // TODO please check it 
     camera_.p_C_I = p_cam_imu_;
 
     // Feature tracking parameteres
