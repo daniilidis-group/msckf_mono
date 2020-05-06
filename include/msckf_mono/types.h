@@ -16,6 +16,9 @@ namespace msckf_mono {
     using Matrix4 = Eigen::Matrix<_Scalar, 4, 4>;
 
   template <typename _Scalar>
+    using Matrix34 = Eigen::Matrix<_Scalar, 3, 4>;
+
+  template <typename _Scalar>
     using MatrixX = Eigen::Matrix<_Scalar, Eigen::Dynamic, Eigen::Dynamic>;
 
   template <typename _Scalar>
@@ -46,9 +49,12 @@ namespace msckf_mono {
     using Isometry3 = Eigen::Transform<_Scalar,3,Eigen::Isometry>;
 
   template <typename _Scalar>
+    using Transform = std::pair<Quaternion<_Scalar>, Point<_Scalar>>;
+
+  template <typename _Scalar>
     struct Camera {
       EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-        _Scalar c_u, c_v, f_u, f_v, b;
+        _Scalar c_u, c_v, f_u, f_v;
 
       Quaternion<_Scalar> q_CI;
       Point<_Scalar> p_C_I;

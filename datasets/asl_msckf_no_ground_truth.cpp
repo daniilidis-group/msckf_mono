@@ -249,7 +249,6 @@ int main(int argc, char** argv)
         float elapsed_dataset_time = (cur_dataset_time - start_dataset_time).toSec();
         float elapsed_clock_time = (cur_clock_time - start_clock_time).toSec();
 
-
         TSTART(feature_tracking_and_warping);
         cv::Mat img = std::get<1>(data_pack).get();
 
@@ -263,9 +262,7 @@ int main(int argc, char** argv)
         corner_detector::IdVector new_ids;
         th.new_features(new_features, new_ids);
 
-        if(elapsed_clock_time > elapsed_dataset_time){
-          ROS_ERROR("skipping frame");
-        }else{
+        {
           TEND(feature_tracking_and_warping);
           TRECORD(feature_tracking_and_warping);
 

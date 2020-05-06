@@ -19,6 +19,7 @@
 #include <boost/math/distributions/chi_squared.hpp>
 
 #include <msckf_mono/types.h>
+#include <msckf_mono/prettyprint.h>
 #include <msckf_mono/matrix_utils.h>
 
 using namespace Eigen;
@@ -144,6 +145,16 @@ namespace msckf_mono {
         imu_cam_covar_ = Phi_ * imu_cam_covar_;
       }
 
+      // Given a new IMU state replace directly
+      void propagate_forced_state(imuState<_S>& imu_state) {
+        imu_state_ = imu_state;
+        pos_init_ = imu_state_.p_I_G;
+        imu_state_.p_I_G_null = imu_state_.p_I_G;
+        imu_state_.v_I_G_null = imu_state_.v_I_G;
+        imu_state_.q_IG_null = imu_state_.q_IG;
+        imu_covar_ = noise_params_.initial_imu_covar;
+      }
+
       // Generates a new camera state and adds it to the full state and covariance.
       void augmentState(const int& state_id, const _S& time) {
         map_.clear();
@@ -256,7 +267,9 @@ namespace msckf_mono {
               track_to_residualize.feature_id = track->feature_id;
               track_to_residualize.observations = track->observations;
               track_to_residualize.initialized = track->initialized;
-              if (track->initialized) track_to_residualize.p_f_G = track->p_f_G;
+              if (track->initialized){
+                track_to_residualize.p_f_G = track->p_f_G;
+              }
 
               feature_tracks_to_residualize_.push_back(track_to_residualize);
             }
@@ -1280,7 +1293,6 @@ namespace msckf_mono {
 
         // Convert the feature position to the world frame.
         p_f_G = T_c0_w.linear() * final_position + T_c0_w.translation();
-
         return is_valid_solution;
       }
 
@@ -1334,6 +1346,7 @@ namespace msckf_mono {
             P.block(15, 0, imu_cam_covar_.cols(), 15) = imu_cam_covar_.transpose();
             P.block(15, 15, cam_covar_.rows(), cam_covar_.cols()) = cam_covar_;
           }
+
 
           MatrixX<_S> T_H, Q_1, R_n;
           VectorX<_S> r_n;

@@ -33,6 +33,10 @@ void CornerDetector::set_grid_position(const cv::Point2f& pos) {
   occupancy_grid_[sub2ind(pos)] = true;
 }
 
+void CornerDetector::set_detection_threshold(double detection_threshold){
+  detection_threshold_ = detection_threshold;
+}
+
 // Function from rpg_vikit - no need to clone whole repo
 // https://github.com/uzh-rpg/rpg_vikit
 float
@@ -178,7 +182,7 @@ void CornerTracker::track_features(cv::Mat img_1, cv::Mat img_2, Point2fVector& 
     cv::Point2f pt = points2.at(i- indexCorrection);
     cv::Point2f dist_vector = points2.at(i-indexCorrection)-points1.at(i-indexCorrection);
     double dist = std::sqrt(dist_vector.x*dist_vector.x+dist_vector.y*dist_vector.y);
-    if(dist>25.0 || (status.at(i) == 0)||(pt.x<0)||(pt.y<0)||(pt.x>w)||(pt.y>h))	{
+    if(dist>50.0 || (status.at(i) == 0)||(pt.x<0)||(pt.y<0)||(pt.x>w)||(pt.y>h))	{
       if((pt.x<0)||(pt.y<0)||(pt.x>w)||(pt.y>h))
         status.at(i) = 0;
 
@@ -198,18 +202,22 @@ TrackHandler::TrackHandler(const cv::Mat K,
   : ransac_threshold_(0.0000002), next_feature_id_(0),
     gyro_accum_(Eigen::Vector3f::Zero()), n_gyro_readings_(0),
     K_(K), K_inv_(K.inv()), distortion_coeffs_(distortion_coeffs),
-    distortion_model_(dist_model), use_gyro_(true)
+    distortion_model_(dist_model), use_gyro_(false)
 {
   dR_ = cv::Mat::eye(3,3,CV_32F);
   clear_tracks();
 
-  tracker_.configure(51, 0.00001, 4, 30, 1.);
+  tracker_.configure(21, 0.001, 4, 30, 1.);
 }
 
 TrackHandler::~TrackHandler() {}
 
 void TrackHandler::set_grid_size(int n_rows, int n_cols) {
   detector_.set_grid_size(n_rows, n_cols);
+}
+
+void TrackHandler::set_detection_threshold(double detection_threshold){
+  detector_.set_detection_threshold(detection_threshold);
 }
 
 void TrackHandler::add_gyro_reading(Eigen::Vector3f& gyro_reading) {
@@ -222,6 +230,7 @@ void TrackHandler::integrate_gyro() {
 
   if(n_gyro_readings_>0){
     gyro_accum_ /= static_cast<float>(n_gyro_readings_);
+    use_gyro_ = true;
   }else{
     use_gyro_ = false;
     return;
@@ -363,7 +372,7 @@ void TrackHandler::tracked_features(OutFeatureVector& features, IdVector& featur
       for(int j=0; j<3; j++)
         dR(i,j) = dR_.at<float>(i,j);
 
-    if(cur_features.size() > 5 && false){
+    if(cur_features.size() > 5 && ransac_threshold_ > 0.0 && false){
       auto valid_pts = twoPointRansac(dR, prev_features, cur_features);
 
       auto ocf_it = cur_features.begin();
@@ -434,7 +443,10 @@ void TrackHandler::undistortPoints(Point2fVector& in, Point2fVector& out){
   } else if (distortion_model_ == "equidistant") {
     cv::fisheye::undistortPoints(in, out, K_, distortion_coeffs_);
   } else {
-    cv::undistortPoints(in, out, K_, distortion_coeffs_);
+    for(auto& pt : in ){
+      out.emplace_back( (pt.x - K_.at<float>(0,2))/K_.at<float>(0,0),
+                        (pt.y - K_.at<float>(1,2))/K_.at<float>(1,1) );
+    }
   }
 }
  
@@ -553,6 +565,11 @@ void TrackHandler::clear_tracks()
   prev_feature_ids_.clear();
 }
 
+cv::Mat TrackHandler::get_image()
+{
+  return prev_img_;
+}
+
 cv::Mat TrackHandler::get_track_image()
 {
   return visualizer_.draw_tracks(prev_img_);
@@ -565,7 +582,7 @@ TrackVisualizer::TrackVisualizer()
 
 void TrackVisualizer::add_predicted(Point2fVector& features, IdVector& feature_ids)
 {
-  assert(fetures.size()==feature_ids.size());
+  assert(features.size()==feature_ids.size());
   predicted_pts_.clear();
 
   auto fit=features.begin();

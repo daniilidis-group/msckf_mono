@@ -4,7 +4,7 @@ project(msckf_mono)
 set( CMAKE_EXPORT_COMPILE_COMMANDS ON )
 
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -msse4.2 -msse -msse2 -mavx -funroll-loops")
-SET(CMAKE_BUILD_TYPE "RelWithDebInfo")
+SET(CMAKE_BUILD_TYPE "Debug")
 
 IF(NOT CMAKE_BUILD_TYPE)
   SET(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build, options are: None (CMAKE_CXX_FLAGS or CMAKE_C_FLAGS used) Debug Release RelWithDebInfo MinSizeRel." FORCE)
@@ -44,6 +44,8 @@ add_message_files(
  CamState.msg
  CamStates.msg
  StageTiming.msg
+ Feature.msg
+ Features.msg
 )
 
 # Generate added messages and services with any dependencies listed here
@@ -87,6 +89,9 @@ LIST(APPEND LINK_LIBS
 LIST(APPEND MSCKF_SRCS
   src/corner_detector.cpp
   src/ros_interface.cpp
+  src/asl_readers.cpp
+  src/kitti_readers.cpp
+  #  src/penncosy_readers.cpp
   )
 
 add_library(msckf_mono
@@ -96,14 +101,17 @@ add_library(msckf_mono
 target_link_libraries(msckf_mono
   ${LINK_LIBS})
 
-add_executable(asl_msckf datasets/asl_msckf.cpp datasets/asl_readers.cpp)
-target_link_libraries(asl_msckf msckf_mono ${LINK_LIBS})
+add_executable(kitti_msckf datasets/kitti_msckf.cpp)
+target_link_libraries(kitti_msckf msckf_mono ${LINK_LIBS})
 
-add_executable(asl_msckf_no_ground_truth datasets/asl_msckf_no_ground_truth.cpp datasets/asl_readers.cpp)
+#### add_executable(asl_msckf datasets/asl_msckf.cpp)
+#### target_link_libraries(asl_msckf msckf_mono ${LINK_LIBS})
+#### 
+add_executable(asl_msckf_no_ground_truth datasets/asl_msckf_no_ground_truth.cpp)
 target_link_libraries(asl_msckf_no_ground_truth msckf_mono ${LINK_LIBS})
 
-add_executable(msckf_mono_node nodes/msckf_mono_node.cpp)
-target_link_libraries(msckf_mono_node msckf_mono ${LINK_LIBS})
+#### add_executable(msckf_mono_node nodes/msckf_mono_node.cpp)
+#### target_link_libraries(msckf_mono_node msckf_mono ${LINK_LIBS})
 
 # add_executable(pcv_msckf datasets/penncosy_msckf.cpp datasets/penncosy_readers.cpp)
 # target_link_libraries(pcv_msckf ${LINK_LIBS} msckf_mono)

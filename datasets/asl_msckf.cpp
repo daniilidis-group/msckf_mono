@@ -3,25 +3,14 @@
 
 #include <ros/ros.h>
 
-#include <image_transport/image_transport.h>
-#include <cv_bridge/cv_bridge.h>
-#include <nav_msgs/Odometry.h>
-#include <geometry_msgs/PoseArray.h>
-#include <nav_msgs/Path.h>
-
-#include <sensor_msgs/PointCloud2.h>
-#include <pcl_ros/point_cloud.h>
-#include <pcl/point_types.h>
+#include <msckf_mono/ros_interface.h>
 
 #include <msckf_mono/corner_detector.h>
-#include <msckf_mono/StageTiming.h>
 
 #include <datasets/data_synchronizers.h>
 #include <datasets/asl_readers.h>
 
 #include <msckf_mono/msckf.h>
-
-#include <msckf_mono/CamStates.h>
 
 using namespace asl_dataset;
 using namespace synchronizer;
@@ -55,6 +44,7 @@ int main(int argc, char** argv)
   Synchronizer<IMU, Camera, GroundTruth> sync(imu0, cam0, gt0);
 
   msckf_mono::MSCKF<float> msckf;
+  msckf_mono::ROSOutput<float> ros_output(nh);
 
   msckf_mono::Camera<float> camera;
   auto K = cam0->get_K();
@@ -178,12 +168,6 @@ int main(int argc, char** argv)
     "\n---b_a " << closest_gt.b_a.transpose() <<
     "\n---b_g " << closest_gt.b_g.transpose());
 
-  ros::Publisher odom_pub = nh.advertise<nav_msgs::Odometry>("odom", 100);
-  ros::Publisher map_pub = nh.advertise<sensor_msgs::PointCloud2>("map", 100);
-  ros::Publisher cam_pose_pub = nh.advertise<geometry_msgs::PoseArray>("cam_state_poses", 100);
-  ros::Publisher pruned_cam_states_track_pub = nh.advertise<nav_msgs::Path>("pruned_cam_states_path", 100);
-  ros::Publisher cam_state_pub = nh.advertise<msckf_mono::CamStates>("cam_states", 100);
-
   ros::Publisher imu_track_pub = nh.advertise<nav_msgs::Path>("imu_path", 100);
   nav_msgs::Path imu_path;
 
@@ -191,10 +175,6 @@ int main(int argc, char** argv)
   nav_msgs::Path gt_path;
 
   ros::Publisher time_state_pub = nh.advertise<msckf_mono::StageTiming>("stage_timing",10);
-
-  image_transport::ImageTransport it(nh);
-  image_transport::Publisher raw_img_pub = it.advertise("image", 1);
-  image_transport::Publisher track_img_pub = it.advertise("image_track", 1);
 
   ros::Rate r_imu(1.0/imu0->get_dT());
   ros::Rate r_cam(1.0/cam0->get_dT());
@@ -301,131 +281,7 @@ int main(int argc, char** argv)
           TSTART(publishing);
           ros::Time cur_ros_time;
           cur_ros_time.fromNSec(cam0->get_time());
-          {
-            nav_msgs::Odometry odom;
-            odom.header.stamp = cur_ros_time;
-            odom.header.frame_id = "map";
-            odom.pose.pose.position.x = imu_state.p_I_G[0];
-            odom.pose.pose.position.y = imu_state.p_I_G[1];
-            odom.pose.pose.position.z = imu_state.p_I_G[2];
-            msckf_mono::Quaternion<float> q_out = imu_state.q_IG.inverse();
-            odom.pose.pose.orientation.w = q_out.w();
-            odom.pose.pose.orientation.x = q_out.x();
-            odom.pose.pose.orientation.y = q_out.y();
-            odom.pose.pose.orientation.z = q_out.z();
-            odom_pub.publish(odom);
-          }
 
-          if(raw_img_pub.getNumSubscribers()>0){
-            cv_bridge::CvImage out_img;
-            out_img.header.frame_id = "cam0"; // Same timestamp and tf frame as input image
-            out_img.header.stamp = cur_ros_time;
-            out_img.encoding = sensor_msgs::image_encodings::TYPE_8UC1; // Or whatever
-            out_img.image    = img; // Your cv::Mat
-            raw_img_pub.publish(out_img.toImageMsg());
-          }
-
-          if(track_img_pub.getNumSubscribers()>0){
-            cv_bridge::CvImage out_img;
-            out_img.header.frame_id = "cam0"; // Same timestamp and tf frame as input image
-            out_img.header.stamp = cur_ros_time;
-            out_img.encoding = sensor_msgs::image_encodings::TYPE_8UC3; // Or whatever
-            out_img.image = th.get_track_image(); // Your cv::Mat
-            track_img_pub.publish(out_img.toImageMsg());
-          }
-
-          if(map_pub.getNumSubscribers()>0){
-            std::vector<Eigen::Vector3f, Eigen::aligned_allocator<Eigen::Vector3f>> map =
-              msckf.getMap();
-            pcl::PointCloud<pcl::PointXYZ>::Ptr pointcloud(new pcl::PointCloud<pcl::PointXYZ>());
-            pointcloud->header.frame_id = "map";
-            pointcloud->height = 1;
-            for (auto& point:map)
-            {
-              pointcloud->points.push_back(pcl::PointXYZ(point(0),
-                    point(1),
-                    point(2)));
-            }
-
-            pointcloud->width = pointcloud->points.size();
-            map_pub.publish(pointcloud);
-          }
-
-          if(cam_pose_pub.getNumSubscribers()>0){
-            geometry_msgs::PoseArray cam_poses;
-
-            auto msckf_cam_poses = msckf.getCamStates();
-            for( auto& cs : msckf_cam_poses ){
-              geometry_msgs::Pose p;
-              p.position.x = cs.p_C_G[0];
-              p.position.y = cs.p_C_G[1];
-              p.position.z = cs.p_C_G[2];
-              msckf_mono::Quaternion<float> q_out = cs.q_CG.inverse();
-              p.orientation.w = q_out.w();
-              p.orientation.x = q_out.x();
-              p.orientation.y = q_out.y();
-              p.orientation.z = q_out.z();
-              cam_poses.poses.push_back(p);
-            }
-
-            cam_poses.header.frame_id = "map";
-            cam_poses.header.stamp = cur_ros_time;
-
-            cam_pose_pub.publish(cam_poses);
-          }
-
-          if(cam_state_pub.getNumSubscribers()>0){
-            msckf_mono::CamStates cam_states;
-
-            auto msckf_cam_states = msckf.getCamStates();
-            for( auto& cs : msckf_cam_states ){
-              msckf_mono::CamState ros_cs;
-
-              ros_cs.stamp.fromSec(cs.time);
-              ros_cs.id = cs.state_id;
-
-              ros_cs.number_tracked_features = cs.tracked_feature_ids.size();
-
-              auto& p = ros_cs.pose;
-              p.position.x = cs.p_C_G[0];
-              p.position.y = cs.p_C_G[1];
-              p.position.z = cs.p_C_G[2];
-              msckf_mono::Quaternion<float> q_out = cs.q_CG.inverse();
-              p.orientation.w = q_out.w();
-              p.orientation.x = q_out.x();
-              p.orientation.y = q_out.y();
-              p.orientation.z = q_out.z();
-
-              cam_states.cam_states.push_back(ros_cs);
-            }
-
-            cam_state_pub.publish(cam_states);
-          }
-
-          if(pruned_cam_states_track_pub.getNumSubscribers()>0){
-            nav_msgs::Path pruned_path;
-            pruned_path.header.stamp = cur_ros_time;
-            pruned_path.header.frame_id = "map";
-            for(auto ci : msckf.getPrunedStates()){
-              geometry_msgs::PoseStamped ps;
-
-              ps.header.stamp.fromNSec(ci.time);
-              ps.header.frame_id = "map";
-
-              ps.pose.position.x = ci.p_C_G[0];
-              ps.pose.position.y = ci.p_C_G[1];
-              ps.pose.position.z = ci.p_C_G[2];
-              msckf_mono::Quaternion<float> q_out = ci.q_CG.inverse();
-              ps.pose.orientation.w = q_out.w();
-              ps.pose.orientation.x = q_out.x();
-              ps.pose.orientation.y = q_out.y();
-              ps.pose.orientation.z = q_out.z();
-
-              pruned_path.poses.push_back(ps);
-            }
-
-            pruned_cam_states_track_pub.publish(pruned_path);
-          }
 
           {
             gt_path.header.stamp = cur_ros_time;

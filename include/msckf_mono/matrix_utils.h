@@ -86,5 +86,54 @@ namespace msckf_mono {
       }
     }
 
+  // Some simple utilities for manipulating rotation and translation pairs
+  template<typename _Scalar>
+    Transform<_Scalar> compose(const Transform<_Scalar>& a, const Transform<_Scalar>& b){
+      Quaternion<_Scalar> R = a.first * b.first;
+      Point<_Scalar> t = a.first * b.second + a.second;
+      return std::make_pair( R, t );
+    }
 
+  template<typename _Scalar>
+    Transform<_Scalar> inverse(const Transform<_Scalar>& a){
+      Quaternion<_Scalar> R = a.first.inverse();
+      Point<_Scalar> t = R * _Scalar(-1.) * a.second;
+      return std::make_pair( R, t );
+    }
+
+  template<typename _O, int _D0, int _D1, typename _I>
+    void vector_to_eigen(const std::vector<_I>& data, Eigen::Matrix<_O,_D0,_D1>& m) {
+      assert(data.size() == _D0 * _D1);
+
+      for(int i=0; i<_D0; i++){
+        for(int j=0; j<_D1; j++){
+          m(i,j) = data[i*_D1 + j];
+        }
+      }
+    }
+
+  template<typename _O, int _D0, int _D1, typename _I>
+    Eigen::Matrix<_O,_D0,_D1> vector_to_eigen(const std::vector<_I>& data) {
+      Eigen::Matrix<_O,_D0,_D1> m;
+      vector_to_eigen<_O,_D0,_D1,_I>(data, m);
+      return m;
+    }
+
+  template<typename _S>
+    void transform_from_mats(const Matrix3<_S> R, const Vector3<_S> t, Matrix4<_S>& T) {
+      // for(int i=0; i<3; i++)
+      //   for(int j=0;j <3; j++)
+      //     T(i,j) = R(i,j);
+
+      // for(int i=0; i<3; i++)
+      //   T(i,3) = t(i,0);
+
+      T.template block<3,3>(0,0) = R;
+      T.template block<3,1>(0,3) = t;
+
+      T(3,0) = 0.;
+      T(3,1) = 0.;
+      T(3,2) = 0.;
+      T(3,3) = 1.;
+    }
 }
