@@ -192,7 +192,7 @@ namespace kitti_dataset
 
   cv::Mat Depth::get_data() {
     std::string fn = folder_ + "/" + name_ + "/data/" + sensor_readings_iter_->second + "." + sensor_suffix_;
-    cv::Mat img = cv::imread(fn, IMREAD_ANYCOLOR | IMREAD_ANYDEPTH) * 5.4;
+    cv::Mat img = cv::imread(fn, CV_LOAD_IMAGE_ANYCOLOR | CV_LOAD_IMAGE_ANYDEPTH);
     if(img.rows == 0 && img.cols == 0){
       std::cout << "Error opening image " << fn << std::endl;
     }
