@@ -148,6 +148,14 @@ namespace kitti_dataset
       msckf_mono::Matrix3<float> K_;
   };
 
+  class Depth : public Sensor
+  {
+    public:
+      Depth(std::string name, std::string folder, std::shared_ptr<Calib> calib);
+
+      cv::Mat get_data();
+  };
+
   enum oxtsIndex {
     lat,lon,alt, // Latitude, longitude, altitude
     roll,pitch,yaw,

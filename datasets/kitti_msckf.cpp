@@ -28,17 +28,32 @@ int main(int argc, char** argv)
         return 0;
     }
 
-    bool force_gt_state;
-    nh.param<bool>("force_gt_state", force_gt_state, true);
+    bool use_cam_update;
+    nh.param<bool>("use_cam_update", use_cam_update, true);
+
+    bool use_acc;
+    bool use_vel;
+    bool use_pos;
+    nh.param<bool>("use_acc", use_acc, false);
+    nh.param<bool>("use_vel", use_vel, false);
+    nh.param<bool>("use_pos", use_pos, false);
+
+    double sync_epsilon;
+    nh.param<double>("sync_epsilon", sync_epsilon, 0.05);
+
+    std::string camera_id = "02";
+    std::string camera_name = "image_" + camera_id;
 
     ROS_INFO_STREAM("Accessing dataset at " << dataset);
 
     std::shared_ptr<Calib> kitti_calib(new Calib(dataset));
-    std::shared_ptr<Image> cam0(new Image("image_00", dataset, kitti_calib));
+    std::shared_ptr<Image> cam0(new Image(camera_name, dataset, kitti_calib));
+
     std::shared_ptr<IMU> imu0(new IMU(dataset));
     std::shared_ptr<GroundTruth> gt(new GroundTruth(dataset));
 
     auto sync = make_synchronizer(imu0, cam0, gt);
+    sync.set_epsilon(sync_epsilon);
 
     cv::Mat K;
     cv::Mat dist_coeffs;
@@ -77,7 +92,7 @@ int main(int argc, char** argv)
 
     msckf_mono::noiseParams<float> noise_params;
     msckf_mono::MSCKFParams<float> msckf_params;
-    std::tie(noise_params, msckf_params) = msckf_mono::fetch_params<float>(nh);
+    std::tie(noise_params, msckf_params) = msckf_mono::fetch_params<float>(nh, msckf_cam.f_u, msckf_cam.f_v);
 
     msckf->initialize(msckf_cam, noise_params, msckf_params, first_imu);
 
@@ -89,7 +104,7 @@ int main(int argc, char** argv)
 
     int state_k = 0;
 
-    while(sync.next() && ros::ok()){
+    while(sync.no_sync_next() && ros::ok()){
       state_k++;
       auto data_pack = sync.get_data();
 
@@ -99,15 +114,18 @@ int main(int argc, char** argv)
       auto image_reading = std::get<1>(data_pack);
       auto gt_reading = std::get<2>(data_pack);
 
-      if (imu_reading && !force_gt_state){
+      if(gt_reading){
+        msckf->propagate_forced_state(gt_reading.get(), use_pos, use_vel);
+      }
+
+      if (imu_reading && use_acc){
         msckf->propagate(imu_reading.get());
+
+        Eigen::Vector3f cam_frame_av = (msckf_cam.q_CI.inverse() * (imu_reading.get().omega-msckf->getImuState().b_g));
+        track_handler->add_gyro_reading(cam_frame_av);
       }
 
-      if(gt_reading && force_gt_state){
-        msckf->propagate_forced_state(gt_reading.get());
-      }
-
-      if(image_reading){
+      if(image_reading && use_cam_update){
         track_handler->set_current_image(image_reading.get(), cam0->get_time());
 
         std::vector<msckf_mono::Vector2<float>, Eigen::aligned_allocator<msckf_mono::Vector2<float>>> cur_features;
@@ -123,6 +141,7 @@ int main(int argc, char** argv)
         msckf->addFeatures(new_features, new_ids);
 
         msckf->marginalize();
+        msckf->pruneRedundantStates();
         msckf->pruneEmptyStates();
 
         ros_output_manager->publishImage(cur_ros_time);
@@ -134,7 +153,7 @@ int main(int argc, char** argv)
 
       ros_output_manager->publishOdom(cur_ros_time);
 
-      {
+      if(false) {
         msckf_mono::imuState<float> imu_state = msckf->getImuState();
         msckf_mono::imuState<float> gt_state = gt->get_data();
         msckf_mono::imuReading<float> imu_data = imu0->get_data();

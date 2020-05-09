@@ -31,7 +31,7 @@
     <param name="keyframe_rot_dist" value="0.05"/>
 
     <param name="min_track_length" value="3"/>
-    <param name="max_track_length" value="50"/>
+    <param name="max_track_length" value="20"/>
     <param name="max_cam_states" value="30"/>
 
     <param name="ransac_threshold" value="0.00000002"/>
@@ -47,7 +47,7 @@
       <node pkg="msckf_mono" name="asl_msckf" type="asl_msckf_no_ground_truth" launch-prefix="perf record -g --call-graph dwarf --output=perf.out.node_name.data --" if="$(arg profile)"/>
     </group>
 
-    <node pkg="rviz" name="msckf_rviz" type="rviz" args="-d $(find msckf_mono)/launch/asl_msckf.rviz"/>
+    <!--node pkg="rviz" name="msckf_rviz" type="rviz" args="-d $(find msckf_mono)/launch/asl_msckf.rviz"/-->
 
   </group>
 </launch>

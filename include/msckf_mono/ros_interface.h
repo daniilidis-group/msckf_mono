@@ -51,6 +51,7 @@ namespace msckf_mono
 
         void publishOdom(const ros::Time publish_time) {
           auto imu_state = msckf_->getImuState();
+          auto imu_covar = msckf_->getImuCovar();
 
           nav_msgs::Odometry odom;
           odom.header.stamp = publish_time;
@@ -59,9 +60,18 @@ namespace msckf_mono
           odom.twist.twist.linear.y = imu_state.v_I_G[1];
           odom.twist.twist.linear.z = imu_state.v_I_G[2];
 
+          for(int i=0; i<6; i++){
+            for(int j=0; j<6; j++){
+              int a = (i<3) ? 12+i : i-3;
+              int b = (j<3) ? 12+j : j-3;
+              odom.pose.covariance[i*6+j] = imu_covar(a,b);
+            }
+          }
+
           odom.pose.pose.position.x = imu_state.p_I_G[0];
           odom.pose.pose.position.y = imu_state.p_I_G[1];
           odom.pose.pose.position.z = imu_state.p_I_G[2];
+
           Quaternion<_S> q_out = imu_state.q_IG.inverse();
           odom.pose.pose.orientation.w = q_out.w();
           odom.pose.pose.orientation.x = q_out.x();
@@ -267,13 +277,13 @@ namespace msckf_mono
   };
 
   template<typename _S>
-    std::tuple<noiseParams<_S>, MSCKFParams<_S>> fetch_params(ros::NodeHandle nh) {
+    std::tuple<noiseParams<_S>, MSCKFParams<_S>> fetch_params(ros::NodeHandle nh, double fu=200., double fv=200.) {
       _S feature_cov;
       nh.param<_S>("feature_covariance", feature_cov, 7);
 
       msckf_mono::noiseParams<_S> noise_params;
-      noise_params.u_var_prime = pow(feature_cov/200.,2);
-      noise_params.v_var_prime = pow(feature_cov/200.,2);
+      noise_params.u_var_prime = pow(feature_cov/fu,2);
+      noise_params.v_var_prime = pow(feature_cov/fv,2);
 
       Eigen::Matrix<_S,12,1> Q_imu_vars;
       _S w_var, dbg_var, a_var, dba_var;
@@ -302,12 +312,12 @@ namespace msckf_mono
       noise_params.initial_imu_covar = IMUCovar_vars.asDiagonal();
 
       msckf_mono::MSCKFParams<_S> msckf_params;
-      nh.param<_S>("max_gn_cost_norm", msckf_params.max_gn_cost_norm, 11);
-      msckf_params.max_gn_cost_norm = pow(msckf_params.max_gn_cost_norm/200., 2);
+      nh.param<_S>("max_gn_cost_norm", msckf_params.max_gn_cost_norm, 11.);
+      msckf_params.max_gn_cost_norm = pow(msckf_params.max_gn_cost_norm/( (fu+fv)/2.0 ), 2);
       nh.param<_S>("translation_threshold", msckf_params.translation_threshold, 0.05);
       nh.param<_S>("min_rcond", msckf_params.min_rcond, 3e-12);
 
-      nh.param<_S>("keyframe_transl_dist", msckf_params.redundancy_angle_thresh, 0.005);
+      nh.param<_S>("keyframe_transl_dist", msckf_params.redundancy_angle_thresh, 0.05);
       nh.param<_S>("keyframe_rot_dist", msckf_params.redundancy_distance_thresh, 0.05);
 
       int max_tl, min_tl, max_cs;

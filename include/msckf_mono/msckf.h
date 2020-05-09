@@ -2,9 +2,7 @@
 #define MSCKF_HPP_
 
 #include <iostream>
-#include <vector>
 #include <set>
-#include <map>
 #include <cstddef>
 #include <limits>
 #include <algorithm>
@@ -35,26 +33,30 @@ namespace msckf_mono {
       Camera<_S> camera_;
       noiseParams<_S> noise_params_;
       MSCKFParams<_S> msckf_params_;
-      // prunedStates;
+
+      // Map of all features
+      std::map<size_t, featureTrack<_S>> feature_track_map_;
+
+      // All current feature tracks
       std::vector<featureTrack<_S>> feature_tracks_;
+      // All current track IDs
       std::vector<size_t> tracked_feature_ids_;
+
+      imuState<_S> imu_state_;
+      Matrix<_S,15,15> imu_covar_;
+
+      std::vector<camState<_S>> cam_states_;
+      MatrixX<_S> cam_covar_;
+      Matrix<_S,15,Dynamic> imu_cam_covar_;
 
       std::vector<featureTrackToResidualize<_S>> feature_tracks_to_residualize_;
       size_t num_feature_tracks_residualized_;
       std::vector<size_t> tracks_to_remove_;
       size_t last_feature_id_;
 
-      imuState<_S> imu_state_;
-      std::vector<camState<_S>> cam_states_;
-
       std::vector<camState<_S>> pruned_states_;
-      std::vector<Vector3<_S>, Eigen::aligned_allocator<Vector3<_S>>> map_;
+      vector<Vector3<_S>> map_;
 
-      Matrix<_S,15,15> imu_covar_;
-      MatrixX<_S> cam_covar_;
-      Matrix<_S,15,Dynamic> imu_cam_covar_;
-
-      std::vector<_S> chi_squared_test_table;
       Vector3<_S> pos_init_;
       Quaternion<_S> quat_init_;
 
@@ -63,6 +65,8 @@ namespace msckf_mono {
       Matrix<_S,15,12> G_;
 
       MatrixX<_S> P_;
+
+      std::vector<_S> chi_squared_test_table_;
 
     public:
       EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -89,10 +93,10 @@ namespace msckf_mono {
 
         // Initialize the chi squared test table with confidence
         // level 0.95.
-        chi_squared_test_table.resize(99);
+        chi_squared_test_table_.resize(99);
         for (int i = 1; i < 100; ++i) {
           boost::math::chi_squared chi_squared_dist(i);
-          chi_squared_test_table[i-1] = boost::math::quantile(chi_squared_dist, 0.05);
+          chi_squared_test_table_[i-1] = boost::math::quantile(chi_squared_dist, 0.05);
         }
         // TODO: Adjust for 0-sized covar?
       }
@@ -146,13 +150,18 @@ namespace msckf_mono {
       }
 
       // Given a new IMU state replace directly
-      void propagate_forced_state(imuState<_S>& imu_state) {
-        imu_state_ = imu_state;
-        pos_init_ = imu_state_.p_I_G;
-        imu_state_.p_I_G_null = imu_state_.p_I_G;
-        imu_state_.v_I_G_null = imu_state_.v_I_G;
-        imu_state_.q_IG_null = imu_state_.q_IG;
-        imu_covar_ = noise_params_.initial_imu_covar;
+      void propagate_forced_state(imuState<_S>& imu_state, bool use_pos=true, bool use_vel=true) {
+        if(use_pos){
+          imu_state_.p_I_G = imu_state.p_I_G;
+          imu_state_.q_IG = imu_state.q_IG;
+          imu_state_.p_I_G_null = imu_state_.p_I_G;
+          imu_state_.q_IG_null = imu_state_.q_IG;
+        }
+
+        if(use_vel){
+          imu_state_.v_I_G = imu_state_.v_I_G;
+          imu_state_.v_I_G_null = imu_state_.v_I_G;
+        }
       }
 
       // Generates a new camera state and adds it to the full state and covariance.
@@ -222,39 +231,43 @@ namespace msckf_mono {
         VectorX<_S> cov_diag = imu_covar_.diagonal();
       }
 
-      // Updates the positions of tracked features at the current timestamp.
-      void update(const std::vector<Vector2<_S>, Eigen::aligned_allocator<Vector2<_S>>> &measurements,
-                  const std::vector<size_t> &feature_ids) {
+      void update(const vector<Vector2<_S>>& features,
+                  const std::vector<size_t>& feature_ids) {
+        map<size_t, Vector2<_S>> update_map;
 
+        for(int i=0; i<feature_ids.size(); i++){
+          update_map.emplace(feature_ids[i], features[i]);
+        }
+
+        update(update_map);
+      }
+
+      // Updates the positions of tracked features at the current timestamp.
+      void update(map<size_t, Vector2<_S>>& measurements) {
         feature_tracks_to_residualize_.clear();
         tracks_to_remove_.clear();
 
-        int id_iter = 0;
         // Loop through all features being tracked
-        for (auto feature_id : tracked_feature_ids_) {
-          // Check if old feature is seen in current measurements
-          auto input_feature_ids_iter =
-            find(feature_ids.begin(), feature_ids.end(), feature_id);
-          bool is_valid = (input_feature_ids_iter != feature_ids.end());
+        for (auto& feature : feature_track_map_) {
+          auto& feature_id = feature.first;
+          auto& track = feature.second;
 
-          // If so, get the relevant track
-          auto track = feature_tracks_.begin() + id_iter;
+          // Check if old feature is seen in current measurements
+          bool is_valid = (measurements.count(feature.first) > 0.);
 
           // If we're still tracking this point, add the observation
           if (is_valid) {
-            size_t feature_ids_dist =
-              distance(feature_ids.begin(), input_feature_ids_iter);
-            track->observations.push_back(measurements[feature_ids_dist]);
+            track.observations.push_back(measurements[feature_id]);
 
-            auto cam_state_iter = cam_states_.end() - 1;
-            cam_state_iter->tracked_feature_ids.push_back(feature_id);
+            auto& cs = cam_states_.back();
+            cs.tracked_feature_ids.push_back(feature_id);
 
-            track->cam_state_indices.push_back(cam_state_iter->state_id);
+            track.cam_state_indices.push_back(cs.state_id);
           }
 
           // If corner is not valid or track is too long, remove track to be
           // residualized
-          if (!is_valid  || (track->observations.size() >=
+          if (!is_valid  || (track.observations.size() >=
                              msckf_params_.max_track_length))
           {
             featureTrackToResidualize<_S> track_to_residualize;
@@ -264,11 +277,11 @@ namespace msckf_mono {
             // If track is long enough, add to the residualized list
             if (track_to_residualize.cam_states.size() >=
                 msckf_params_.min_track_length) {
-              track_to_residualize.feature_id = track->feature_id;
-              track_to_residualize.observations = track->observations;
-              track_to_residualize.initialized = track->initialized;
-              if (track->initialized){
-                track_to_residualize.p_f_G = track->p_f_G;
+              track_to_residualize.feature_id = track.feature_id;
+              track_to_residualize.observations = track.observations;
+              track_to_residualize.initialized = track.initialized;
+              if (track.initialized){
+                track_to_residualize.p_f_G = track.p_f_G;
               }
 
               feature_tracks_to_residualize_.push_back(track_to_residualize);
@@ -276,8 +289,6 @@ namespace msckf_mono {
 
             tracks_to_remove_.push_back(feature_id);
           }
-
-          id_iter++;
         }
 
         // TODO: Double check this stuff and maybe use use non-pointers for accessing
@@ -312,8 +323,18 @@ namespace msckf_mono {
       }
 
       // Adds newly detected features to the filter.
-      void addFeatures(const std::vector<Vector2<_S>, Eigen::aligned_allocator<Vector2<_S>>>& features,
+      void addFeatures(const vector<Vector2<_S>>& features,
                        const std::vector<size_t>& feature_ids) {
+        std::map<size_t, Vector2<_S>> update_map;
+
+        for(int i=0; i<feature_ids.size(); i++){
+          update_map.emplace(feature_ids[i], features[i]);
+        }
+
+        addFeatures(update_map);
+      }
+
+      void addFeatures(std::map<size_t, Vector2<_S>>& measurements) {
         // Assumes featureIDs match features
         // Original code is a bit confusing here. Seems to allow for repeated feature
         // IDs
@@ -321,26 +342,18 @@ namespace msckf_mono {
         // TODO: revisit this assumption if necessary
         using camStateIter = typename std::vector<camState<_S>>::iterator;
 
-        for (size_t i = 0; i < features.size(); i++) {
-          size_t id = feature_ids[i];
-          if (std::find(tracked_feature_ids_.begin(), tracked_feature_ids_.end(),
-                        id) == tracked_feature_ids_.end()) {
-            // New feature
-            featureTrack<_S> track;
-            track.feature_id = feature_ids[i];
-            track.observations.push_back(features[i]);
+        for (auto& feature : measurements) {
+          // New feature
+          featureTrack<_S> track;
+          track.feature_id = feature.first;
+          track.observations.push_back(feature.second);
 
-            camStateIter cam_state_last = cam_states_.end() - 1;
-            cam_state_last->tracked_feature_ids.push_back(feature_ids[i]);
+          camStateIter cam_state_last = cam_states_.end() - 1;
+          cam_state_last->tracked_feature_ids.push_back(feature.first);
 
-            track.cam_state_indices.push_back(cam_state_last->state_id);
+          track.cam_state_indices.push_back(cam_state_last->state_id);
 
-            feature_tracks_.push_back(track);
-            tracked_feature_ids_.push_back(feature_ids[i]);
-          } else {
-            std::cout << "Error, added new feature that was already being tracked" << std::endl;
-            return;
-          }
+          feature_track_map_.emplace(track.feature_id, track);
         }
       }
 
@@ -359,7 +372,7 @@ namespace msckf_mono {
           min_norm = std::numeric_limits<_S>::infinity();
 
           std::vector<bool> valid_tracks;
-          std::vector<Vector3<_S>, Eigen::aligned_allocator<Vector3<_S>>> p_f_G_vec;
+          vector<Vector3<_S>> p_f_G_vec;
           int total_nObs = 0;
 
           for (auto track = feature_tracks_to_residualize_.begin();
@@ -557,7 +570,7 @@ namespace msckf_mono {
 
         for (auto &feature : feature_tracks_) {
           std::vector<size_t> involved_cam_state_ids;
-          std::vector<Vector2<_S>, Eigen::aligned_allocator<Vector2<_S>>> involved_observations;
+          vector<Vector2<_S>> involved_observations;
           for (const auto &cam_id : rm_cam_state_ids) {
             auto cam_it = find(feature.cam_state_indices.begin(),
                                feature.cam_state_indices.end(), cam_id);
@@ -830,7 +843,12 @@ namespace msckf_mono {
         return imu_state_;
       }
 
-      inline std::vector<Vector3<_S>, Eigen::aligned_allocator<Vector3<_S>>> getMap()
+      inline Matrix<_S,15,15> getImuCovar()
+      {
+        return imu_covar_;
+      }
+
+      inline vector<Vector3<_S>> getMap()
       {
         return map_;
       }
@@ -972,7 +990,7 @@ namespace msckf_mono {
 
       VectorX<_S> calcResidual(const Vector3<_S> &p_f_G,
                                const std::vector<camState<_S>> &camStates,
-                               const std::vector<Vector2<_S>, Eigen::aligned_allocator<Vector2<_S>>> &observations) {
+                               const vector<Vector2<_S>> &observations) {
         // CALCRESIDUAL Calculates the residual for a feature position
 
         VectorX<_S> r_j = VectorX<_S>::Constant(2 * camStates.size(),
@@ -1127,7 +1145,7 @@ namespace msckf_mono {
           noise_params_.u_var_prime * MatrixX<_S>::Identity(H.rows(), H.rows());
         _S gamma = r.transpose() * (P1 + P2).ldlt().solve(r);
 
-        if (gamma < chi_squared_test_table[dof+1]) {
+        if (gamma < chi_squared_test_table_[dof+1]) {
           // cout << "passed" << endl;
           return true;
         } else {
@@ -1158,11 +1176,10 @@ namespace msckf_mono {
       }
 
       bool initializePosition(const std::vector<camState<_S>> &camStates,
-                              const std::vector<Vector2<_S>, Eigen::aligned_allocator<Vector2<_S>>> &measurements,
+                              const vector<Vector2<_S>> &measurements,
                               Vector3<_S> &p_f_G) {
         // Organize camera poses and feature observations properly.
-        std::vector<Isometry3<_S>, Eigen::aligned_allocator<Isometry3<_S>>>
-          cam_poses(0);
+        vector<Isometry3<_S>> cam_poses(0);
 
         for (auto &cam : camStates) {
           // This camera pose will take a std::vector from this camera frame

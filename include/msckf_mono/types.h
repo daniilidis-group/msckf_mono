@@ -4,6 +4,8 @@
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 #include <vector>
+#include <map>
+#include <unordered_map>
 
 namespace msckf_mono {
   template <typename _Scalar>
@@ -50,6 +52,15 @@ namespace msckf_mono {
 
   template <typename _Scalar>
     using Transform = std::pair<Quaternion<_Scalar>, Point<_Scalar>>;
+
+  template <typename T>
+    using vector = std::vector<T, Eigen::aligned_allocator<T>>;
+
+  template <typename _K, typename T>
+    using map = std::map<_K, T, std::less<_K>, Eigen::aligned_allocator<std::pair<_K, T>>>;
+
+  template <typename _K, typename T>
+    using unordered_map = std::unordered_map<_K, T, Eigen::aligned_allocator<std::pair<_K, T>>>;
 
   template <typename _Scalar>
     struct Camera {

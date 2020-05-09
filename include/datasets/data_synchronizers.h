@@ -105,7 +105,7 @@ namespace synchronizer
       typedef std::result_of_t<decltype(&first_Ts::get_time)(first_Ts)> TimeType;
       typedef typename std::tuple<boost::optional<std::result_of_t<decltype(&Ts::get_data)(Ts)>> ...> SensorDataPack;
 
-      Synchronizer(std::shared_ptr<Ts>... Sensors) : sensors_(std::make_tuple(Sensors...))
+      Synchronizer(std::shared_ptr<Ts>... Sensors) : sensors_(std::make_tuple(Sensors...)), eps_(0)
     {
       static_assert(conjunction<typename has_next<Ts>::type ...>::value,
           "All sensors must implement next.");
@@ -119,12 +119,17 @@ namespace synchronizer
       static_assert(std::tuple_size<SensorPack>::value > 0, "Must have at least one sensor.");
     };
 
+      void set_epsilon(TimeType eps) {
+        eps_ = eps;
+      }
+
       SensorDataPack get_data()
       {
-        auto master_time = apply(sensors_, [](auto...s){return std::min({s->get_time()...});});
+        auto master_time = apply(sensors_, [](auto...s){return std::min({s->get_time()...});}) + eps_;
+
         SensorDataPack sdp = apply(sensors_, [&master_time](auto...s)
             {
-              return std::make_tuple(Synchronizer::conditional_get_data(*s, s->get_time()<=master_time) ... );
+              return std::make_tuple(Synchronizer::conditional_get_data(*s, s->get_time() <= master_time ) ... );
             });
         return sdp;
       }
@@ -134,6 +139,19 @@ namespace synchronizer
         auto master_time = apply(sensors_, [](auto...s){return std::min({s->get_time()...});});
         return TimeType(master_time);
       };
+
+      bool no_sync_next()
+      {
+        if(!has_next())
+          return false;
+
+        apply(sensors_, [](auto...s)
+            {
+              return std::make_tuple(Synchronizer::conditional_next(*s, true) ... );
+            });
+
+        return true;
+      }
 
       bool next()
       {
@@ -156,6 +174,7 @@ namespace synchronizer
 
     private:
       SensorPack sensors_;
+      TimeType eps_;
   };
 
   template<typename... Ts>

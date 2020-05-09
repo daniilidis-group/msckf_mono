@@ -9,39 +9,50 @@
 
   <arg name="dataset_path" default="$(arg base_path)/$(arg kitti_date)/$(arg kitti_date)_drive_$(arg kitti_seq)_sync"/>
 
-  <arg name="force_gt" default="true"/>
+  <arg name="use_acc" default="true"/>
+  <arg name="use_vel" default="false"/>
+  <arg name="use_pos" default="false"/>
+  <arg name="use_cam" default="true"/>
+
+  <arg name="camera" default="image_00"/>
 
   <group ns="msckf">
     <param name="dataset_path" value="$(arg dataset_path)"/>
 
-    <param name="feature_cov" value="8"/>
+    <param name="feature_cov" value="0.5"/>
 
-    <param name="force_gt_state" value="$(arg force_gt)"/>
+    <param name="camera" value="$(arg camera)"/>
+    <param name="use_acc" value="$(arg use_acc)"/>
+    <param name="use_vel" value="$(arg use_vel)"/>
+    <param name="use_pos" value="$(arg use_pos)"/>
+    <param name="use_cam_update" value="$(arg use_cam)"/>
+
+    <param name="sync_epsilon" value="0.1"/>
 
     <param name="imu_vars/w_var" value="1e-4"/>
-    <param name="imu_vars/dbg_var" value="3.6733e-5"/>
-    <param name="imu_vars/a_var" value="1e-2"/>
-    <param name="imu_vars/dba_var" value="7e-2"/>
+    <param name="imu_vars/dbg_var" value="3.6733e-4"/>
+    <param name="imu_vars/a_var" value="1e-3"/>
+    <param name="imu_vars/dba_var" value="7e-3"/>
 
     <param name="imu_covars/p_init" value="1e-12"/>
-    <param name="imu_covars/q_init" value="1e-5"/>
+    <param name="imu_covars/q_init" value="1e-3"/>
     <param name="imu_covars/v_init" value="1e-2"/>
-    <param name="imu_covars/ba_init" value="1e-2"/>
-    <param name="imu_covars/bg_init" value="1e-2"/>
+    <param name="imu_covars/ba_init" value="1e-1"/>
+    <param name="imu_covars/bg_init" value="1e-1"/>
 
-    <param name="translation_threshold" value="0.05"/><!--Max translation from marginalizing state-->
+    <param name="translation_threshold" value="1.0"/><!--Max translation from marginalizing state-->
 
-    <param name="keyframe_transl_dist" value="0.05"/>
+    <param name="keyframe_transl_dist" value="0.5"/>
     <param name="keyframe_rot_dist" value="0.05"/>
 
-    <param name="min_track_length" value="10"/>
-    <param name="max_track_length" value="30"/>
-    <param name="max_cam_states" value="40"/>
+    <param name="min_track_length" value="5"/>
+    <param name="max_track_length" value="50"/>
+    <param name="max_cam_states" value="50"/>
 
     <param name="ransac_threshold" value="-1.0"/>
 
-    <param name="n_grid_rows" value="20"/>
-    <param name="n_grid_cols" value="60"/>
+    <param name="n_grid_rows" value="30"/>
+    <param name="n_grid_cols" value="100"/>
 
     <group unless="$(arg profile)">
       <node pkg="msckf_mono" name="kitti_msckf" type="kitti_msckf" unless="$(arg gdb_debug)" output="screen"/>
