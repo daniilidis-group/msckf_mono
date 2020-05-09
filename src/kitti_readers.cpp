@@ -187,18 +187,6 @@ namespace kitti_dataset
     return name_;
   }
 
-  Depth::Depth(std::string name, std::string folder, std::shared_ptr<Calib> calib) : Sensor(name, folder, "exr"){
-  }
-
-  cv::Mat Depth::get_data() {
-    std::string fn = folder_ + "/" + name_ + "/data/" + sensor_readings_iter_->second + "." + sensor_suffix_;
-    cv::Mat img = cv::imread(fn, CV_LOAD_IMAGE_ANYCOLOR | CV_LOAD_IMAGE_ANYDEPTH);
-    if(img.rows == 0 && img.cols == 0){
-      std::cout << "Error opening image " << fn << std::endl;
-    }
-    return img;
-  }
-
   Image::Image(std::string name, std::string folder, std::shared_ptr<Calib> calib) : Sensor(name, folder, "png"){
     msckf_mono::Matrix4<float> T_cam_imu;
     if (name == "image_00") {
@@ -221,7 +209,7 @@ namespace kitti_dataset
   }
 
   cv::Mat Image::get_data() {
-    std::string fn = folder_ + "/" + name_ + "/data/" + sensor_readings_iter_->second + "_depth." + sensor_suffix_;
+    std::string fn = folder_ + "/" + name_ + "/data/" + sensor_readings_iter_->second + "." + sensor_suffix_;
     cv::Mat img = cv::imread(fn, CV_LOAD_IMAGE_GRAYSCALE);
     if(img.rows == 0 && img.cols == 0){
       std::cout << "Error opening image " << fn << std::endl;
