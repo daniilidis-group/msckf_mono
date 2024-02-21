@@ -565,7 +565,7 @@ TrackVisualizer::TrackVisualizer()
 
 void TrackVisualizer::add_predicted(Point2fVector& features, IdVector& feature_ids)
 {
-  assert(fetures.size()==feature_ids.size());
+  assert(features.size()==feature_ids.size());
   predicted_pts_.clear();
 
   auto fit=features.begin();
